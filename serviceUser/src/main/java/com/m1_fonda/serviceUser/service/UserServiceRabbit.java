@@ -54,10 +54,7 @@ public class UserServiceRabbit {
     @Value("${app.rabbitmq.timeout:30000}")
     private long responseTimeout;
 
-    // =====================================
-    // ENVOIE DES EVENTS SÉCURISÉS
-    // =====================================
-
+   
     /**
      * Envoie demande de création vers AgenceService
      * : N'enregistre PAS en base avant validation

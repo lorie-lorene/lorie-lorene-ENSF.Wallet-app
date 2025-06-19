@@ -74,10 +74,6 @@ public class UserController {
     @Autowired
     private UserService repository;
 
-    // =====================================
-    // ENDPOINTS D'AUTHENTIFICATION
-    // =====================================
-
     /**
      * Enregistrement d'un nouveau client
      */
@@ -149,11 +145,11 @@ public class UserController {
     // =====================================
 
     /**
-     * Effectuer un dépôt
+     * Effectuer un dépôt a revoir
      */
     @PostMapping("/deposit")
     @PreAuthorize("hasRole('CLIENT')")
-    @Operation(summary = "Effectuer un dépôt sur un compte")
+    @Operation(summary = "Effectuer un dépôt sur une carte de credit")
     public ResponseEntity<TransactionResponse> deposit(
             @Valid @RequestBody DepositRequest request,
             Authentication authentication) {
@@ -161,7 +157,7 @@ public class UserController {
         try {
             String clientId = extractClientId(authentication);
 
-            log.info("Demande dépôt: {} FCFA sur compte {} par client {}",
+            log.info("Demande dépôt: {} FCFA sur la carte {} par client {}",
                     request.getMontant(), request.getNumeroCompte(), clientId);
 
             TransactionResponse response = userServiceRabbit.sendDepot(request, clientId);
@@ -179,11 +175,11 @@ public class UserController {
     }
 
     /**
-     * Effectuer un retrait
+     * Effectuer un retrait de son compte pour la carte ..
      */
     @PostMapping("/withdrawal")
     @PreAuthorize("hasRole('CLIENT')")
-    @Operation(summary = "Effectuer un retrait d'un compte")
+    @Operation(summary = "Effectuer un retrait d'un compte pour sa carte de credit")
     public ResponseEntity<TransactionResponse> withdrawal(
             @Valid @RequestBody WithdrawalRequest request,
             Authentication authentication) {
