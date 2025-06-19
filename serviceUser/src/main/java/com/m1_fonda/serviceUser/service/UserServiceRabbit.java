@@ -54,7 +54,6 @@ public class UserServiceRabbit {
     @Value("${app.rabbitmq.timeout:30000}")
     private long responseTimeout;
 
-   
     /**
      * Envoie demande de création vers AgenceService
      * : N'enregistre PAS en base avant validation
@@ -171,11 +170,7 @@ public class UserServiceRabbit {
     // =====================================
     // OPERATIONS FINANCIÈRES SÉCURISÉES
     // =====================================
-
-    /**
-     * Envoi dépôt avec validation sécurisée dans la recharge de la carte du client
-     * on va appeller l'api pour augmneter le solde la carte du client
-     */
+    // aps tres utile
     public TransactionResponse sendDepot(DepositRequest request, String clientId) {
         // CORRECTION : Validation métier AVANT le try-catch
         validateFinancialOperation(clientId, request.getMontant());
@@ -213,9 +208,8 @@ public class UserServiceRabbit {
     }
 
     /**
-     * Envoi retrait avec validation sécurisée.. faire une transaction vers son
-     * compte orange/mtn
-     * retirer de l'argnet de la carte pour mettre dans om
+     * Envoi dépôt avec validation sécurisée dans la recharge de la carte du client
+     * on va appeller l'api pour augmneter le solde la carte du client
      */
     public TransactionResponse sendRetrait(WithdrawalRequest request, String clientId) {
         // CORRECTION : Validation métier AVANT le try-catch
@@ -255,7 +249,7 @@ public class UserServiceRabbit {
 
     /**
      * Envoi transaction inter-comptes sécurisée
-     * prevoir le tranfert inter carte
+     * 
      */
     public TransactionResponse sendTransaction(TransferRequest request, String clientId) {
         // CORRECTION : Validations métier AVANT le try-catch
@@ -393,7 +387,7 @@ public class UserServiceRabbit {
     }
 
     // =====================================
-    // SERVICES DE NOTIFICATION
+    // SERVICES DE discussion avec assistance ..
     // =====================================
 
     private void sendWelcomeNotification(Client client, Long numeroCompte) {
