@@ -1,10 +1,9 @@
 package com.wallet.bank_card_service.exception;
 
-
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
-
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -23,9 +22,9 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(CarteException.class)
     public ResponseEntity<Map<String, Object>> handleCarteException(
             CarteException ex, WebRequest request) {
-        
+
         log.warn("Erreur métier carte: {} - {}", ex.getErrorCode(), ex.getMessage());
-        
+
         Map<String, Object> body = new HashMap<>();
         body.put("timestamp", LocalDateTime.now());
         body.put("status", HttpStatus.BAD_REQUEST.value());
@@ -33,21 +32,21 @@ public class GlobalExceptionHandler {
         body.put("errorCode", ex.getErrorCode());
         body.put("message", ex.getMessage());
         body.put("path", request.getDescription(false));
-        
+
         return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, Object>> handleValidationExceptions(
             MethodArgumentNotValidException ex, WebRequest request) {
-        
+
         Map<String, String> validationErrors = new HashMap<>();
         ex.getBindingResult().getAllErrors().forEach((error) -> {
             String fieldName = ((FieldError) error).getField();
             String errorMessage = error.getDefaultMessage();
             validationErrors.put(fieldName, errorMessage);
         });
-        
+
         Map<String, Object> body = new HashMap<>();
         body.put("timestamp", LocalDateTime.now());
         body.put("status", HttpStatus.BAD_REQUEST.value());
@@ -56,16 +55,16 @@ public class GlobalExceptionHandler {
         body.put("message", "Données invalides");
         body.put("validationErrors", validationErrors);
         body.put("path", request.getDescription(false));
-        
+
         return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<Map<String, Object>> handleAccessDeniedException(
             AccessDeniedException ex, WebRequest request) {
-        
+
         log.warn("Accès refusé: {}", ex.getMessage());
-        
+
         Map<String, Object> body = new HashMap<>();
         body.put("timestamp", LocalDateTime.now());
         body.put("status", HttpStatus.FORBIDDEN.value());
@@ -73,16 +72,16 @@ public class GlobalExceptionHandler {
         body.put("errorCode", "ACCESS_DENIED");
         body.put("message", "Vous n'avez pas les droits nécessaires");
         body.put("path", request.getDescription(false));
-        
+
         return new ResponseEntity<>(body, HttpStatus.FORBIDDEN);
     }
 
     @ExceptionHandler(SecurityException.class)
     public ResponseEntity<Map<String, Object>> handleSecurityException(
             SecurityException ex, WebRequest request) {
-        
+
         log.warn("Erreur sécurité: {}", ex.getMessage());
-        
+
         Map<String, Object> body = new HashMap<>();
         body.put("timestamp", LocalDateTime.now());
         body.put("status", HttpStatus.UNAUTHORIZED.value());
@@ -90,16 +89,16 @@ public class GlobalExceptionHandler {
         body.put("errorCode", "SECURITY_ERROR");
         body.put("message", "Authentification requise");
         body.put("path", request.getDescription(false));
-        
+
         return new ResponseEntity<>(body, HttpStatus.UNAUTHORIZED);
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGlobalException(
             Exception ex, WebRequest request) {
-        
+
         log.error("Erreur technique non gérée: ", ex);
-        
+
         Map<String, Object> body = new HashMap<>();
         body.put("timestamp", LocalDateTime.now());
         body.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
@@ -107,7 +106,26 @@ public class GlobalExceptionHandler {
         body.put("errorCode", "INTERNAL_SERVER_ERROR");
         body.put("message", "Une erreur technique est survenue");
         body.put("path", request.getDescription(false));
-        
+
         return new ResponseEntity<>(body, HttpStatus.INTERNAL_SERVER_ERROR);
     }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleNoResourceFound(NoResourceFoundException ex) {
+
+        // Ignorer les erreurs favicon
+        if (ex.getMessage() != null && ex.getMessage().contains("favicon.ico")) {
+            return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+        }
+
+        // Traiter les autres erreurs
+        Map<String, Object> body = new HashMap<>();
+        body.put("timestamp", LocalDateTime.now());
+        body.put("status", 404);
+        body.put("error", "Resource not found");
+        body.put("message", ex.getMessage());
+
+        return new ResponseEntity<>(body, HttpStatus.NOT_FOUND);
+    }
+
 }
