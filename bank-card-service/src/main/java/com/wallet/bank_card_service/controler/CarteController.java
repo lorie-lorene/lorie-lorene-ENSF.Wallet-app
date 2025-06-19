@@ -18,11 +18,14 @@ import com.wallet.bank_card_service.dto.CarteOperationResult;
 import com.wallet.bank_card_service.dto.CarteSettingsRequest;
 import com.wallet.bank_card_service.dto.CarteStatistiques;
 import com.wallet.bank_card_service.dto.CarteType;
+import com.wallet.bank_card_service.dto.OrangeMoneyRechargeRequest;
 import com.wallet.bank_card_service.dto.PinChangeRequest;
+import com.wallet.bank_card_service.dto.RechargeResult;
 import com.wallet.bank_card_service.dto.TransfertCarteRequest;
 import com.wallet.bank_card_service.dto.TransfertCarteResult;
 import com.wallet.bank_card_service.model.Carte;
 import com.wallet.bank_card_service.service.CarteService;
+import com.wallet.bank_card_service.service.MoneyServiceClient;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -41,6 +44,8 @@ public class CarteController {
 
     @Autowired
     private CarteService carteService;
+    @Autowired
+    private MoneyServiceClient moneyServiceClient;
 
     /**
      * Créer une nouvelle carte bancaire
@@ -592,6 +597,55 @@ public class CarteController {
             case "CARTE_INACTIVE", "CARTE_EXPIREE", "PIN_INCORRECT" -> HttpStatus.BAD_REQUEST;
             default -> HttpStatus.BAD_REQUEST;
         };
+    }
+
+    /*
+     * recharge d'une carte de credit par l'api money service
+     */
+    @PostMapping("/{idCarte}/recharge-orange-money")
+    @PreAuthorize("hasRole('CLIENT')")
+    public ResponseEntity<RechargeResult> rechargeFromOrangeMoney(
+            @PathVariable String idCarte,
+            @RequestBody @Valid OrangeMoneyRechargeRequest request,
+            Authentication authentication) {
+
+        try {
+            log.info("💳 [RECHARGE] Demande recharge Orange Money - Carte: {}, Montant: {}",
+                    idCarte, request.getMontant());
+
+            String clientId = authentication.getName();
+
+            // Vérifier que la carte appartient au client
+            Carte carte = carteService.findById(idCarte);
+            if (carte == null || !carte.getIdClient().equals(clientId)) {
+                return ResponseEntity.badRequest().body(
+                        RechargeResult.failed("Carte non trouvée ou non autorisée"));
+            }
+
+            // Vérifier que la carte est active
+            if (!carte.isActive()) {
+                return ResponseEntity.badRequest().body(
+                        RechargeResult.failed("Carte non active"));
+            }
+
+            // Appeler le service Money
+            Map<String, Object> moneyResponse = moneyServiceClient.initiateCardRecharge(idCarte, request, clientId);
+
+            String status = (String) moneyResponse.get("status");
+            String message = (String) moneyResponse.get("message");
+            String requestId = (String) moneyResponse.get("requestId");
+
+            if ("PENDING".equals(status)) {
+                return ResponseEntity.ok(RechargeResult.success(requestId, request.getMontant(), message));
+            } else {
+                return ResponseEntity.badRequest().body(RechargeResult.failed(message));
+            }
+
+        } catch (Exception e) {
+            log.error("❌ [RECHARGE] Erreur: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest().body(
+                    RechargeResult.failed("Erreur technique: " + e.getMessage()));
+        }
     }
 
     // ========================================

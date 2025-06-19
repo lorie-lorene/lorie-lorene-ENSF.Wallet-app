@@ -953,4 +953,32 @@ public class CarteService {
 
         return recommendations;
     }
+    
+    public void creditCarteFromOrangeMoney(String idCarte, BigDecimal montant, String transactionId) {
+        Carte carte = findById(idCarte);
+                if (carte == null) {
+                    throw new CarteException("CARTE_NOT_FOUND", "Carte non trouvée: " + idCarte);
+                }
+            
+                if (!carte.isActive()) {
+                    throw new CarteException("CARTE_NOT_ACTIVE", "Carte non active");
+                }
+            
+                // Créditer la carte
+                carte.credit(montant);
+                
+                // Ajouter action spécifique Orange Money
+                carte.addAction(Carte.CarteActionType.CREDIT, montant, 
+                        "Crédit Orange Money - " + transactionId, "ORANGE_MONEY");
+            
+                carteRepository.save(carte);
+                
+                log.info("✅ Carte créditée depuis Orange Money - ID: {}, Montant: {}, Nouveau solde: {}", 
+                        idCarte, montant, carte.getSolde());
+            }
+        
+            public Carte findById(String idCarte) {
+                // TODO Auto-generated method stub
+                throw new UnsupportedOperationException("Unimplemented method 'findById'");
+            }
 }
