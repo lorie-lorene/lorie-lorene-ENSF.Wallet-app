@@ -98,7 +98,7 @@ public class AgenceController {
      * Récupération du solde d'un compte
      */
     @GetMapping("/comptes/{numeroCompte}/solde")
-    @PreAuthorize("hasRole('AGENCE') or hasRole('ADMIN')")
+    @PreAuthorize("hasRole('AGENCE') or hasRole('ADMIN') or hasRole('CLIENT')")
     @Operation(summary = "Consulter le solde d'un compte")
     public ResponseEntity<Map<String, Object>> getAccountBalance(
             @PathVariable @NotBlank String numeroCompte) {
@@ -393,7 +393,6 @@ public class AgenceController {
         }
     }
 
-   
     /**
      * Vérification de la santé du service
      */
@@ -420,9 +419,9 @@ public class AgenceController {
             Map<String, Object> config = Map.of(
                     "fraisDepotPhysique", "0%",
                     "fraisRetraitPhysique", "1.5% (min 100 FCFA)",
-                    "fraisRetraitMobileMoney", "2.5% (min 150 FCFA)",
+                    "fraisRetraitMobileMoney", "1.5% (min 150 FCFA)",
                     "fraisTransfertInterne", "1% (min 50 FCFA)",
-                    "fraisTransfertExterne", "3% (min 500 FCFA)",
+                    "fraisTransfertExterne", "2% (min 500 FCFA)",
                     "tva", "17.5%",
                     "fraisTenueCompte", "500 FCFA/mois");
 

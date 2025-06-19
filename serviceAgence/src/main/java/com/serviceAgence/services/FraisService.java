@@ -26,7 +26,7 @@ public class FraisService {
         TransactionType.RETRAIT_PHYSIQUE, new BigDecimal("1.5"), // 1.5%
         TransactionType.RETRAIT_MOBILE_MONEY, new BigDecimal("2.5"), // 2.5%
         TransactionType.TRANSFERT_INTERNE, new BigDecimal("1.0"), // 1%
-        TransactionType.TRANSFERT_EXTERNE, new BigDecimal("3.0"), // 3%
+        TransactionType.TRANSFERT_EXTERNE, new BigDecimal("2.0"), // 3%
         TransactionType.FRAIS_TENUE_COMPTE, BigDecimal.ZERO // Fixe mensuel
     );
 
