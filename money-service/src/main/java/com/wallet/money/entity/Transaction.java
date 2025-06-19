@@ -52,7 +52,15 @@ public class Transaction {
     private LocalDateTime updatedAt;
     
     @Field("expired_at")
-    private LocalDateTime expiredAt;      // Expiration du lien de paiement
+    private LocalDateTime expiredAt; 
+    @Field("id_carte")
+private String idCarte;              // ID de la carte concernée
+
+@Field("callback_url") 
+private String callbackUrl;          // URL de callback pour notifier le service Carte
+
+@Field("callback_retries")
+private int callbackRetries = 0;      // Expiration du lien de paiement
     
     // Constructeur pour nouvelles transactions
     public static Transaction createDeposit(String clientId, String phoneNumber, BigDecimal amount) {
