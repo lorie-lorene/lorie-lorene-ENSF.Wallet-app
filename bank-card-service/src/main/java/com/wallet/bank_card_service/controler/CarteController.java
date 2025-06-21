@@ -648,6 +648,56 @@ public class CarteController {
         }
     }
 
+
+    /*
+     * recharge d'une carte de credit par l'api money service
+     */
+    @PostMapping("/{idCarte}/debit-orange-money")
+    @PreAuthorize("hasRole('CLIENT')")
+    public ResponseEntity<RechargeResult> debitFromOrangeMoney(
+            @PathVariable String idCarte,
+            @RequestBody @Valid OrangeMoneyRechargeRequest request,
+            Authentication authentication) {
+
+        try {
+            log.info("💳 [RECHARGE] Demande recharge Orange Money - Carte: {}, Montant: {}",
+                    idCarte, request.getMontant());
+
+            String clientId = authentication.getName();
+
+            // Vérifier que la carte appartient au client
+            Carte carte = carteService.findById(idCarte);
+            if (carte == null || !carte.getIdClient().equals(clientId)) {
+                return ResponseEntity.badRequest().body(
+                        RechargeResult.failed("Carte non trouvée ou non autorisée"));
+            }
+
+            // Vérifier que la carte est active
+            if (!carte.isActive()) {
+                return ResponseEntity.badRequest().body(
+                        RechargeResult.failed("Carte non active"));
+            }
+
+            // Appeler le service Money
+            Map<String, Object> moneyResponse = moneyServiceClient.initiateCardRecharge(idCarte, request, clientId);
+
+            String status = (String) moneyResponse.get("status");
+            String message = (String) moneyResponse.get("message");
+            String requestId = (String) moneyResponse.get("requestId");
+
+            if ("PENDING".equals(status)) {
+                return ResponseEntity.ok(RechargeResult.success(requestId, request.getMontant(), message));
+            } else {
+                return ResponseEntity.badRequest().body(RechargeResult.failed(message));
+            }
+
+        } catch (Exception e) {
+            log.error("❌ [RECHARGE] Erreur: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest().body(
+                    RechargeResult.failed("Erreur technique: " + e.getMessage()));
+        }
+    }
+
     // ========================================
     // GESTION D'ERREURS
     // ========================================
