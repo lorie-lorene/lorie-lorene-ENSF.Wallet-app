@@ -10,7 +10,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wallet.money.entity.PaymentResponse;
-import com.wallet.money.service.CardServiceClient;
 import com.wallet.money.service.TransactionService;
 
 import lombok.extern.slf4j.Slf4j;
