@@ -178,26 +178,26 @@ spec:
 apiVersion: apps/v1  
 kind: Deployment  
 metadata:  
-  name: service-depot-user  
+  name: bank-card-service  
   namespace: microservices  
 spec:  
   replicas: 1  
   selector:  
     matchLabels:  
-      app: service-depot-user  
+      app: bank-card-service  
   template:  
     metadata:  
       labels:  
-        app: service-depot-user  
+        app: bank-card-service  
     spec:  
       containers:  
-        - name: service-depot-user  
-          image: nikoum/service-depot-user:latest  
+        - name: bank-card-service  
+          image: nikoum/bank-card-service:latest  
           ports:  
-            - containerPort: 8097  
+            - containerPort: 8096 
           env:  
             - name: SPRING_APPLICATION_NAME  
-              value: "service-depot-user"  
+              value: "bank-card-service"  
             - name: SPRING_CLOUD_CONFIG_URI  
               value: "http://service-configuration:8080"  
             - name: SPRING_CONFIG_IMPORT  
@@ -206,7 +206,7 @@ spec:
 apiVersion: v1  
 kind: Service  
 metadata:  
-  name: service-depot-user  
+  name: bank-card-service  
   namespace: microservices  
 spec:  
   type: LoadBalancer  
@@ -214,7 +214,7 @@ spec:
     - port: 8197  
       targetPort: 8097
   selector:  
-    app: service-depot-user  
+    app: bank-card-service  
 ---  
 
 # Service Agence
@@ -237,7 +237,7 @@ spec:
         - name: service-agence  
           image: nikoum/service-agence:latest  
           ports:  
-            - containerPort: 8092  
+            - containerPort: 8092
           env:  
             - name: SPRING_APPLICATION_NAME  
               value: "serviceAgence"  
@@ -350,67 +350,67 @@ spec:
 apiVersion: apps/v1  
 kind: Deployment  
 metadata:  
-  name: service-retrait  
+  name: money-service 
   namespace: microservices  
 spec:  
   replicas: 1  
   selector:  
     matchLabels:  
-      app: service-retrait  
+      app: money-service  
   template:  
     metadata:  
       labels:  
-        app: service-retrait  
+        app: money-service  
     spec:  
       containers:  
-        - name: service-retrait  
-          image: nikoum/service-retrait:latest  
+        - name: money-service 
+          image: nikoum/money-service:latest  
           ports:  
-            - containerPort: 8100  
+            - containerPort: 8095 
           env:  
             - name: APPLICATION_NAME  
-              value: "serviceRetrait"  
+              value: "money-service"  
             - name: CONFIG_SERVER_URL 
               value: "http://service-configuration:8080/serviceRetrait/head" 
 ---  
 apiVersion: v1  
 kind: Service  
 metadata:  
-  name: service-retrait  
+  name: money-service  
   namespace: microservices  
 spec:  
   type: LoadBalancer  
   ports:  
-    - port: 8200  
-      targetPort: 8100  
+    - port: 8195  
+      targetPort: 8095  
   selector:  
-    app: service-retrait
+    app: money-service
 ---  
 
 # Service Transaction
 apiVersion: apps/v1  
 kind: Deployment  
 metadata:  
-  name: sevice-transaction  
+  name: bank-card-service  
   namespace: microservices  
 spec:  
   replicas: 1  
   selector:  
     matchLabels:  
-      app: sevice-transaction  
+      app: bank-card-service  
   template:  
     metadata:  
       labels:  
-        app: sevice-transaction  
+        app: bank-card-service 
     spec:  
       containers:  
-        - name: sevice-transaction  
-          image: nikoum/sevice-transaction:latest  
+        - name: bank-card-service  
+          image: nikoum/bank-card-service:latest  
           ports:  
-            - containerPort: 8098  
+            - containerPort: 8096 
           env:  
             - name: SPRING_APPLICATION_NAME  
-              value: "seviceTransaction"  
+              value: "bank-card-service"  
             - name: SPRING_CLOUD_CONFIG_URI  
               value: "http://service-configuration:8080"  
             - name: SPRING_CONFIG_IMPORT  
@@ -419,15 +419,15 @@ spec:
 apiVersion: v1  
 kind: Service  
 metadata:  
-  name: sevice-transaction  
+  name: bank-card-service  
   namespace: microservices  
 spec:  
   type: LoadBalancer  
   ports:  
-    - port: 8198  
-      targetPort: 8098  
+    - port: 8196 
+      targetPort: 8096  
   selector:  
-    app: sevice-transaction
+    app: bank-card-service
 ---  
 
 # rabbit
