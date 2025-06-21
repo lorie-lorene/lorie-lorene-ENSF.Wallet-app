@@ -1,6 +1,5 @@
 package com.serviceDemande.service;
 
-
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,31 +30,31 @@ public class DemandeProcessingService {
 
     @Autowired
     private DemandeRepository demandeRepository;
-    
+
     @Autowired
     private AntiFraudeService antiFraudeService;
-    
+
     @Autowired
     private LimitesService limitesService;
-    
+
     @Autowired
     private RabbitTemplate rabbitTemplate;
-    
+
     @Autowired
     private NotificationService notificationService;
 
     /**
      * Réception et traitement des demandes de validation depuis ServiceAgence
      */
-    @RabbitListener(queues = MessagingConfig.VALIDATION_REQUEST_QUEUE)
+    @RabbitListener(queues = "Demande-Queue")
     public void processValidationRequest(ValidationRequest request) {
-        log.info("🔍 Réception demande validation: client={}, agence={}", 
+        log.info("🔍 Réception demande validation: client={}, agence={}",
                 request.getIdClient(), request.getIdAgence());
 
         try {
             // 1. Créer ou récupérer la demande
             Demande demande = createOrUpdateDemande(request);
-            
+
             // 2. Validation format basique
             ValidationResult formatValidation = validateFormat(request);
             if (!formatValidation.isValid()) {
@@ -63,14 +62,14 @@ public class DemandeProcessingService {
                 sendRejectionResponse(request, formatValidation.getErrorCode(), formatValidation.getMessage());
                 return;
             }
-            
+
             // 3. Analyse anti-fraude
             demande.updateStatus(DemandeStatus.ANALYZING, "Début analyse anti-fraude", "SYSTEM");
             FraudAnalysisResult fraudAnalysis = antiFraudeService.analyzeRequest(demande);
-            
+
             // 4. Mise à jour des données de risque
             updateRiskData(demande, fraudAnalysis);
-            
+
             // 5. Prise de décision
             processDecision(demande, fraudAnalysis, request);
 
@@ -85,7 +84,7 @@ public class DemandeProcessingService {
      */
     @RabbitListener(queues = MessagingConfig.TRANSACTION_VALIDATION_QUEUE)
     public void processTransactionValidation(TransactionValidationRequest request) {
-        log.info("💳 Validation transaction: client={}, montant={}, type={}", 
+        log.info("💳 Validation transaction: client={}, montant={}, type={}",
                 request.getIdClient(), request.getMontant(), request.getType());
 
         try {
@@ -101,16 +100,16 @@ public class DemandeProcessingService {
             }
 
             Demande demande = demandeOpt.get();
-            
+
             // Analyse de risque en temps réel pour la transaction
             TransactionRiskResult riskResult = analyzeTransactionRisk(request, demande);
-            
+
             if (riskResult.isBlocked()) {
                 sendTransactionRejection(request, riskResult.getBlockReason(), riskResult.getMessage());
-                
+
                 // Alerter si transaction suspecte
                 if (riskResult.isSuspicious()) {
-                    notificationService.sendFraudAlert(request.getIdClient(), 
+                    notificationService.sendFraudAlert(request.getIdClient(),
                             "TRANSACTION_SUSPECTE", riskResult.getMessage());
                 }
             } else {
@@ -127,7 +126,7 @@ public class DemandeProcessingService {
      * Traitement manuel des demandes nécessitant une révision
      */
     public void processManualReview(String demandeId, boolean approved, String reviewerNotes, String reviewerId) {
-        log.info("👨‍💼 Révision manuelle: demande={}, approuvé={}, reviewer={}", 
+        log.info("👨‍💼 Révision manuelle: demande={}, approuvé={}, reviewer={}",
                 demandeId, approved, reviewerId);
 
         Optional<Demande> demandeOpt = demandeRepository.findById(demandeId);
@@ -144,31 +143,32 @@ public class DemandeProcessingService {
             // Approbation manuelle
             TransactionLimits limits = limitesService.calculateLimits(
                     demande.getRiskScore(), demande.getRiskLevel(), demande.getIdAgence());
-            
+
             approveDemande(demande, limits, "Approuvé manuellement par " + reviewerId);
-            
+
             ValidationResponse response = ValidationResponse.approved(
                     demande.getEventId(), demande.getIdClient(), demande.getIdAgence(),
                     demande.getEmail(), limits, demande.getRiskScore());
-            
+
             sendValidationResponse(response);
-            
+
         } else {
             // Rejet manuel
             rejectDemande(demande, "REJET_MANUEL", "Rejeté manuellement: " + reviewerNotes);
-            
+
             ValidationResponse response = ValidationResponse.rejected(
                     demande.getEventId(), demande.getIdClient(), demande.getIdAgence(),
                     demande.getEmail(), "REJET_MANUEL", reviewerNotes);
-            
+
             sendValidationResponse(response);
         }
-        
+
         demandeRepository.save(demande);
     }
+
     private Demande createOrUpdateDemande(ValidationRequest request) {
         Optional<Demande> existingOpt = demandeRepository.findByEventId(request.getEventId());
-        
+
         if (existingOpt.isPresent()) {
             log.info("Mise à jour demande existante: {}", request.getEventId());
             return existingOpt.get();
@@ -189,29 +189,29 @@ public class DemandeProcessingService {
         demande.setAgenceValidation(request.getAgenceValidation());
         demande.setCreatedAt(LocalDateTime.now());
         demande.setExpiresAt(LocalDateTime.now().plusDays(7)); // Expire dans 7 jours
-        
-        demande.addAction(ActionType.VALIDATION_REQUESTED, 
+
+        demande.addAction(ActionType.VALIDATION_REQUESTED,
                 "Demande reçue de " + request.getSourceService(), "SYSTEM");
-        
+
         return demandeRepository.save(demande);
     }
 
     private ValidationResult validateFormat(ValidationRequest request) {
         // Validation CNI camerounaise
         if (!isValidCameroonianCNI(request.getCni())) {
-            return ValidationResult.invalid("FORMAT_CNI_INCORRECT", 
+            return ValidationResult.invalid("FORMAT_CNI_INCORRECT",
                     "Format CNI camerounaise invalide (8-12 chiffres requis)");
         }
 
         // Validation numéro de téléphone camerounais
         if (!isValidCameroonianPhone(request.getNumero())) {
-            return ValidationResult.invalid("FORMAT_NUMERO_INCORRECT", 
+            return ValidationResult.invalid("FORMAT_NUMERO_INCORRECT",
                     "Format numéro camerounais invalide (6XXXXXXXX)");
         }
 
         // Validation email
         if (!isValidEmail(request.getEmail())) {
-            return ValidationResult.invalid("FORMAT_EMAIL_INCORRECT", 
+            return ValidationResult.invalid("FORMAT_EMAIL_INCORRECT",
                     "Format email invalide");
         }
 
@@ -232,51 +232,51 @@ public class DemandeProcessingService {
         demande.setRiskLevel(fraudAnalysis.getRiskLevel());
         demande.setFraudFlags(fraudAnalysis.getFraudFlags());
         demande.setRequiresManualReview(fraudAnalysis.isRequiresManualReview());
-        
+
         demande.addAction(ActionType.FRAUD_ANALYSIS_COMPLETED,
-                String.format("Analyse terminée - Score: %d, Niveau: %s", 
+                String.format("Analyse terminée - Score: %d, Niveau: %s",
                         fraudAnalysis.getRiskScore(), fraudAnalysis.getRiskLevel()),
                 "ANTIFRAUD_SYSTEM");
-        
+
         demandeRepository.save(demande);
     }
 
     private void processDecision(Demande demande, FraudAnalysisResult fraudAnalysis, ValidationRequest request) {
         int riskScore = fraudAnalysis.getRiskScore();
-        
+
         if (riskScore >= 80 || fraudAnalysis.getFraudFlags().contains("CNI_DEJA_UTILISEE")) {
             // Rejet automatique pour risque critique
-            rejectDemande(demande, "RISQUE_CRITIQUE", 
+            rejectDemande(demande, "RISQUE_CRITIQUE",
                     "Score de risque trop élevé: " + riskScore + " - " + fraudAnalysis.getRecommendation());
-            
+
             sendRejectionResponse(request, "RISQUE_CRITIQUE", fraudAnalysis.getRecommendation());
-            
+
         } else if (fraudAnalysis.isRequiresManualReview()) {
             // Révision manuelle requise
-            demande.updateStatus(DemandeStatus.MANUAL_REVIEW, 
+            demande.updateStatus(DemandeStatus.MANUAL_REVIEW,
                     "Révision manuelle requise - " + fraudAnalysis.getRecommendation(), "SYSTEM");
-            
+
             demande.addAction(ActionType.MANUAL_REVIEW_ASSIGNED,
                     "Demande assignée pour révision manuelle", "SYSTEM");
-            
+
             demandeRepository.save(demande);
-            
+
             // Notifier les superviseurs
             notificationService.sendManualReviewNotification(demande);
-            
+
             sendManualReviewResponse(request, fraudAnalysis.getRecommendation());
-            
+
         } else {
             // Approbation automatique
             TransactionLimits limits = limitesService.calculateLimits(
                     riskScore, fraudAnalysis.getRiskLevel(), demande.getIdAgence());
-            
+
             approveDemande(demande, limits, "Approuvé automatiquement - " + fraudAnalysis.getRecommendation());
-            
+
             ValidationResponse response = ValidationResponse.approved(
                     request.getEventId(), request.getIdClient(), request.getIdAgence(),
                     request.getEmail(), limits, riskScore);
-            
+
             sendValidationResponse(response);
         }
     }
@@ -286,20 +286,20 @@ public class DemandeProcessingService {
         demande.setLimiteDailyWithdrawal(limits.getDailyWithdrawal());
         demande.setLimiteDailyTransfer(limits.getDailyTransfer());
         demande.setLimiteMonthlyOperations(limits.getMonthlyOperations());
-        
+
         demandeRepository.save(demande);
-        
-        log.info("✅ Demande approuvée: client={}, limites={}/{}/{}", 
-                demande.getIdClient(), limits.getDailyWithdrawal(), 
+
+        log.info("✅ Demande approuvée: client={}, limites={}/{}/{}",
+                demande.getIdClient(), limits.getDailyWithdrawal(),
                 limits.getDailyTransfer(), limits.getMonthlyOperations());
     }
 
     private void rejectDemande(Demande demande, String errorCode, String reason) {
         demande.updateStatus(DemandeStatus.REJECTED, reason, "SYSTEM");
         demande.setRejectionReason(errorCode + ": " + reason);
-        
+
         demandeRepository.save(demande);
-        
+
         log.info("❌ Demande rejetée: client={}, raison={}", demande.getIdClient(), reason);
     }
 
@@ -312,9 +312,8 @@ public class DemandeProcessingService {
             rabbitTemplate.convertAndSend(
                     MessagingConfig.DEMANDE_EXCHANGE,
                     MessagingConfig.VALIDATION_RESPONSE_KEY,
-                    response
-            );
-            log.info("📤 Réponse validation envoyée: client={}, statut={}", 
+                    response);
+            log.info("📤 Réponse validation envoyée: client={}, statut={}",
                     response.getIdClient(), response.getStatut());
         } catch (Exception e) {
             log.error("❌ Erreur envoi réponse validation: {}", e.getMessage(), e);
@@ -343,12 +342,11 @@ public class DemandeProcessingService {
         response.setMessage("Transaction autorisée");
         response.setRiskScore(risk.getRiskScore());
         response.setTimestamp(LocalDateTime.now());
-        
+
         rabbitTemplate.convertAndSend(
                 MessagingConfig.DEMANDE_EXCHANGE,
                 "transaction.validation.response",
-                response
-        );
+                response);
     }
 
     private void sendTransactionRejection(TransactionValidationRequest request, String errorCode, String message) {
@@ -359,12 +357,11 @@ public class DemandeProcessingService {
         response.setErrorCode(errorCode);
         response.setMessage(message);
         response.setTimestamp(LocalDateTime.now());
-        
+
         rabbitTemplate.convertAndSend(
                 MessagingConfig.DEMANDE_EXCHANGE,
                 "transaction.validation.response",
-                response
-        );
+                response);
     }
 
     // ========================================
@@ -372,13 +369,15 @@ public class DemandeProcessingService {
     // ========================================
 
     private boolean isValidCameroonianCNI(String cni) {
-        if (cni == null || cni.trim().isEmpty()) return false;
+        if (cni == null || cni.trim().isEmpty())
+            return false;
         String cleanCni = cni.trim().replaceAll("\\s+", "");
         return cleanCni.matches("\\d{8,12}");
     }
 
     private boolean isValidCameroonianPhone(String phone) {
-        if (phone == null) return false;
+        if (phone == null)
+            return false;
         return phone.matches("^6[5-9]\\d{7}$");
     }
 

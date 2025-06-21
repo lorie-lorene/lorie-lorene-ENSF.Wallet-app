@@ -56,6 +56,7 @@ public class TransfertStatus {
 
                 break;
             case "ACCEPTE":
+                rabbitTemplate.convertAndSend("Annonce-exchange", "request.response.annonce.to.client", annonce);
 
                 sendEmailToclient.sendEmail(email, agence, reponse);
                 sendEmailToclient.sendEmail2(email, agence, password);

@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -64,6 +65,7 @@ public class CarteService {
 
     private final SecureRandom random = new SecureRandom();
 
+
     /**
      * Création d'une nouvelle carte bancaire
      */
@@ -117,6 +119,7 @@ public class CarteService {
     /**
      * Transfert d'argent du compte vers une carte
      */
+    @RabbitListener
     public TransfertCarteResult transferToCard(TransfertCarteRequest request, String clientId) {
         log.info("💳 Transfert vers carte: compte={}, carte={}, montant={}",
                 request.getNumeroCompteSource(), request.getIdCarteDestination(), request.getMontant());

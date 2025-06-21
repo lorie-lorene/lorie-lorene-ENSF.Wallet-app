@@ -8,7 +8,7 @@ import org.springframework.context.annotation.Configuration;
 public class QueueRabbit {
 
     public static final String QUEUE_Statut = "Statut-Demande-Queue";
-    public static final String QUEUE_Client = "Client-demande-Queue";
+    public static final String QUEUE_Client = "Response-Demande-Client-Queue";
     public static final String QUEUE_PW = "Reset-PW-Queue";
     public static final String QUEUE_Transaction = "Statut-Transaction-Queue";
 
