@@ -23,25 +23,25 @@ public class ConfigQueue {
         return new Queue(QUEUE_Entrant);
     }
 
-    /* Client --> Depot */
+    /* Client --> Agence */
     @Bean
     public Queue queue_2() {
         return new Queue(QUEUE_Entrant2);
     }
 
-    /* Client --> Traansaction */
+    /* Client --> Agence */
     @Bean
     public Queue queue_3() {
         return new Queue(QUEUE_Entrant3);
     }
 
-    /* Client --> agence */
+    /* Client --> Agence */
     @Bean
     public Queue queue_4() {
         return new Queue(QUEUE_Entrant4);
     }
 
-    /* Client --> Retraituser */
+    /* Client --> Agence */
     @Bean
     public Queue queue_5() {
         return new Queue(QUEUE_Entrant5);
