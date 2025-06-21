@@ -63,4 +63,5 @@ public class CardServiceClient {
             throw new RuntimeException("Erreur notification service Carte", e);
         }
     }
+    
 }

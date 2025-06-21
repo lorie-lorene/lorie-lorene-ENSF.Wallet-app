@@ -1,0 +1,163 @@
+version: '3.3'
+
+services:
+  service-configuration:
+    build: ./service-configuration
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_APPLICATION_NAME=service-configuration
+      - SPRING_CLOUD_CONFIG_SERVER_GIT_URI=https://github.com/lorie-lorene/cloud-conf
+    networks:
+      - microservices-network
+
+  service-register:
+    build: ./serviceRegister
+    depends_on:
+      - service-configuration
+    ports:
+      - "8761:8761" #port depuis l'exterieur:port du service propement dit a l'interieur du conteneur
+    environment:
+      - SPRING_APPLICATION_NAME=serviceRegister
+      - SPRING_CLOUD_CONFIG_URI=http://service-configuration:8080
+      - SPRING_CONFIG_IMPORT=configserver:http://service-configuration:8080
+    networks:
+      - microservices-network
+
+
+  service-user:
+    build: ./serviceUser
+    depends_on:
+      - service-configuration
+      - service-register
+    ports:
+      - "8081" # le port externe sera allouer dinamiquement par docker compose
+    environment:
+      - SPRING_APPLICATION_NAME=serviceUser
+      - SPRING_CLOUD_CONFIG_URI=http://service-configuration:8080
+      - SPRING_CONFIG_IMPORT=configserver:http://service-configuration:8080
+    networks:
+      - microservices-network
+
+
+  service-depot-user:
+    build: ./service-depot-user
+    depends_on:
+      - service-configuration
+      - service-register
+    ports:
+      - "8097" # le port externe sera allouer dinamiquement par docker compose
+    environment:
+      - SPRING_APPLICATION_NAME=service-depot-user
+      - SPRING_CLOUD_CONFIG_URI=http://service-configuration:8080
+      - SPRING_CONFIG_IMPORT=configserver:http://service-configuration:8080
+    networks:
+      - microservices-network
+
+  service-agence:
+    build: ./serviceAgence
+    depends_on:
+      - service-configuration
+      - service-register
+    ports:
+      - "8092" # le port externe sera allouer dinamiquement par docker compose
+    environment:
+      - SPRING_APPLICATION_NAME=serviceAgence
+      - SPRING_CLOUD_CONFIG_URI=http://service-configuration:8080
+      - SPRING_CONFIG_IMPORT=configserver:http://service-configuration:8080
+    networks:
+      - microservices-network
+
+  service-annonce:
+    build: ./serviceAnnonce
+    depends_on:
+      - service-configuration
+      - service-register
+    ports:
+      - "8094" # le port externe sera allouer dinamiquement par docker compose
+    environment:
+      - SPRING_APPLICATION_NAME=serviceAnnonce
+      - SPRING_CLOUD_CONFIG_URI=http://service-configuration:8080
+      - SPRING_CONFIG_IMPORT=configserver:http://service-configuration:8080
+    networks:
+      - microservices-network
+
+  service-demande:
+    build: ./serviceDemande
+    depends_on:
+      - service-configuration
+      - service-register
+    ports:
+      - "8093" # le port externe sera allouer dinamiquement par docker compose
+    environment:
+      - SPRING_APPLICATION_NAME=serviceDemande
+      - SPRING_CLOUD_CONFIG_URI=http://service-configuration:8080
+      - SPRING_CONFIG_IMPORT=configserver:http://service-configuration:8080
+    networks:
+      - microservices-network
+
+  sevice-transaction:
+    build: ./seviceTransaction
+    depends_on:
+      - service-configuration
+      - service-register
+    ports:
+      - "8098" # le port externe sera allouer dinamiquement par docker compose
+    environment:
+      - SPRING_APPLICATION_NAME=seviceTransaction
+      - SPRING_CLOUD_CONFIG_URI=http://service-configuration:8080
+      - SPRING_CONFIG_IMPORT=configserver:http://service-configuration:8080
+    networks:
+      - microservices-network
+
+  service-retrait:
+    build: ./serviceRetrait
+    depends_on:
+      - service-configuration
+      - service-register
+    ports:
+      - "8100"  # Le port externe sera alloué dynamiquement par Docker Compose
+    environment:
+      - CONFIG_SERVER_URL=http://service-configuration:8080/serviceRetrait/head
+      - APPLICATION_NAME=serviceRetrait
+    networks:
+      - microservices-network
+
+
+  service-proxy:
+    build: ./serviceProxy
+    depends_on:
+      - service-configuration
+      - service-register
+    ports:
+      - "8082:8079" 
+    environment:
+      - SPRING_APPLICATION_NAME=serviceProxy
+      - SPRING_CLOUD_CONFIG_URI=http://service-configuration:8080
+      - SPRING_CONFIG_IMPORT=configserver:http://service-configuration:8080
+    networks:
+      - microservices-network
+
+
+  rabbitmq:
+    image: rabbitmq:management
+    ports:
+      - "5672:5672" #port pour envoyer les requetes a rabbit mq
+      - "15672:15672" #port pour acceder a l'interface user
+
+    networks:
+      - microservices-network
+
+  walletmongodb:
+    image: mongo:latest
+    container_name: walletmongodb
+    ports:
+      - "27017:27017" 
+    networks:
+      - microservices-network
+
+
+networks:
+  microservices-network:
+    driver: bridge
+     

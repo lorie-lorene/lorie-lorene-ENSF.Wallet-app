@@ -1,6 +1,5 @@
 package com.wallet.money.carteclient;
 
-
 import lombok.Data;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -13,4 +12,6 @@ public class CallbackPayload {
     private BigDecimal montant;
     private String transactionId;
     private LocalDateTime timestamp;
+    private String clientAction;
+    private String cancellationReason;
 }

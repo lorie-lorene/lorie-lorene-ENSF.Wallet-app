@@ -17,5 +17,4 @@ public class RegistrationResponseEvent {
     private String probleme; // Code d'erreur si refus
     private Long numeroCompte; // Si accepté
     private LocalDateTime timestamp;
-    private String targetService = "UserService";
 }

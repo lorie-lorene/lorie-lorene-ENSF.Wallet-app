@@ -2,8 +2,10 @@ package com.wallet.money.service;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import com.wallet.money.carteclient.CallbackPayload;
@@ -18,6 +20,76 @@ public class TransactionService {
 
     @Autowired
     public TransactionRepository transactionRepository;
+    // AJOUTER cette méthode dans votre classe existante :
+
+    @Autowired
+    private CardServiceClient cardServiceClient;
+
+    public void updateStatusFromWebhookWithCardNotification(String reference, String status, String reason) {
+        Transaction transaction = transactionRepository.findByFreemoReference(reference).orElse(null);
+
+        if (transaction == null) {
+            log.warn("⚠️ Transaction non trouvée pour référence: {}", reference);
+            return;
+        }
+
+        if (!"PENDING".equals(transaction.getStatus())) {
+            log.info("🔄 Transaction {} déjà traitée", transaction.getExternalId());
+            return;
+        }
+
+        String newStatus;
+        String clientAction;
+
+        switch (status.toUpperCase()) {
+            case "SUCCESS":
+            case "SUCCES":
+                newStatus = "SUCCESS";
+                clientAction = "VALIDATED";
+                break;
+            case "FAILED":
+                if (reason != null && reason.toLowerCase().contains("cancelled")) {
+                    newStatus = "CANCELLED";
+                    clientAction = "CANCELLED";
+                } else {
+                    newStatus = "FAILED";
+                    clientAction = "TECHNICAL_ERROR";
+                }
+                break;
+            default:
+                newStatus = "FAILED";
+                clientAction = "UNKNOWN";
+        }
+
+        transaction.setStatus(newStatus);
+        transaction.setClientAction(clientAction);
+        transaction.setCancellationReason(reason);
+        transaction.setValidationTimestamp(LocalDateTime.now());
+        transaction.setUpdatedAt(LocalDateTime.now());
+        transactionRepository.save(transaction);
+
+        // Notifier le service Carte si c'est une recharge
+        if ("CARD_RECHARGE".equals(transaction.getType()) && transaction.getCallbackUrl() != null) {
+            try {
+                CallbackPayload payload = new CallbackPayload();
+                payload.setRequestId(transaction.getExternalId());
+                payload.setIdCarte(transaction.getIdCarte());
+                payload.setStatus(newStatus);
+                payload.setClientAction(clientAction);
+                payload.setMontant(transaction.getAmount());
+                payload.setTransactionId(transaction.getFreemoReference());
+                payload.setCancellationReason(transaction.getCancellationReason());
+                payload.setTimestamp(LocalDateTime.now());
+
+                cardServiceClient.sendRechargeCallback(transaction.getCallbackUrl(), payload);
+
+            } catch (Exception e) {
+                log.error("❌ Erreur notification service Carte: {}", e.getMessage());
+                transaction.setCallbackRetries(transaction.getCallbackRetries() + 1);
+                transactionRepository.save(transaction);
+            }
+        }
+    }
 
     /**
      * Créer une transaction en attente
@@ -91,49 +163,20 @@ public class TransactionService {
     private String generateExternalId(String clientId) {
         return "DEP_" + clientId + "_" + System.currentTimeMillis();
     }
-    /**
- * Mettre à jour le statut et notifier le service Carte si recharge
- */
-public void updateStatusFromWebhookWithCardNotification(String reference, String status, CardServiceClient cardServiceClient) {
-    Transaction transaction = transactionRepository.findByFreemoReference(reference).orElse(null);
 
-    if (transaction == null) {
-        log.warn("⚠️ Transaction non trouvée pour référence: {}", reference);
-        return;
-    }
+    // AJOUTER cette méthode
+    @Scheduled(fixedRate = 60000) // Chaque minute
+    public void checkExpiredTransactions() {
+        LocalDateTime expired = LocalDateTime.now().minusMinutes(10);
+        List<Transaction> pendingTransactions = transactionRepository
+                .findByStatusAndCreatedAtBefore("PENDING", expired);
 
-    if (!"PENDING".equals(transaction.getStatus())) {
-        log.info("🔄 Transaction {} déjà traitée", transaction.getExternalId());
-        return;
-    }
+        for (Transaction t : pendingTransactions) {
+            t.setStatus("EXPIRED");
+            t.setFailureReason("Timeout - Non validé par le client");
+            transactionRepository.save(t);
 
-    // Mettre à jour le statut
-    String newStatus = "SUCCESS".equalsIgnoreCase(status) || "SUCCES".equalsIgnoreCase(status) ? "SUCCESS" : "FAILED";
-    transaction.setStatus(newStatus);
-    transaction.setUpdatedAt(LocalDateTime.now());
-    transactionRepository.save(transaction);
-
-    log.info("✅ Transaction mise à jour - ExternalId: {} | Statut: {}", transaction.getExternalId(), newStatus);
-
-    // Si c'est une recharge de carte, notifier le service Carte
-    if ("CARD_RECHARGE".equals(transaction.getType()) && transaction.getCallbackUrl() != null) {
-        try {
-            CallbackPayload payload = new CallbackPayload();
-            payload.setRequestId(transaction.getExternalId());
-            payload.setIdCarte(transaction.getIdCarte());
-            payload.setStatus(newStatus);
-            payload.setMontant(transaction.getAmount());
-            payload.setTransactionId(transaction.getFreemoReference());
-            payload.setTimestamp(LocalDateTime.now());
-
-            cardServiceClient.sendRechargeCallback(transaction.getCallbackUrl(), payload);
-
-        } catch (Exception e) {
-            log.error("❌ Erreur notification service Carte: {}", e.getMessage());
-            transaction.setCallbackRetries(transaction.getCallbackRetries() + 1);
-            transactionRepository.save(transaction);
         }
     }
-}
 
 }

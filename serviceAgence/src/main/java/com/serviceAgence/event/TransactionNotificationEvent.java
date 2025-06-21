@@ -1,6 +1,5 @@
 package com.serviceAgence.event;
 
-
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -18,6 +17,7 @@ public class TransactionNotificationEvent {
     private String eventId;
     private String transactionId;
     private String idClient;
+    private String email;
     private TransactionType type;
     private BigDecimal montant;
     private BigDecimal frais;

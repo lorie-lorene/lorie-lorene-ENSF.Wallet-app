@@ -22,8 +22,6 @@ public class WebhookController {
 
     @Autowired
     private TransactionService transactionService; // ⬅️ Changement ici
-    @Autowired
-    private CardServiceClient cardServiceClient;
 
     @PostMapping()
     public ResponseEntity<Void> handlePaymentNotification(@RequestBody String rawBody) {
@@ -40,11 +38,12 @@ public class WebhookController {
 
             String reference = paymentResponse.getReference();
             String status = paymentResponse.getStatus();
+            String message = paymentResponse.getMessage(); // Pour la raison
 
             log.info("🔄 Webhook - Référence: {} | Statut: {}", reference, status);
 
-            // ⭐ REMPLACER l'ancienne méthode par la nouvelle
-            transactionService.updateStatusFromWebhookWithCardNotification(reference, status, cardServiceClient);
+            // REMPLACER l'ancien appel par le nouveau
+            transactionService.updateStatusFromWebhookWithCardNotification(reference, status, message);
 
             log.info("✅ Webhook traité - Référence: {}", reference);
             return ResponseEntity.ok().build();

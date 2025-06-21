@@ -1,22 +1,22 @@
 package com.wallet.money.controller;
+
 import com.wallet.money.carteclient.CardRechargeRequest;
 import com.wallet.money.carteclient.CardRechargeResponse;
 import com.wallet.money.entity.PaymentRequest;
 import com.wallet.money.entity.PaymentResponse;
 import com.wallet.money.entity.Transaction;
-import com.wallet.money.service.CardServiceClient;
 import com.wallet.money.service.DepotMoneyService;
 import com.wallet.money.service.TransactionService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/money/card-recharge")
@@ -26,12 +26,9 @@ public class CardRechargeController {
 
     @Autowired
     private DepotMoneyService depotMoneyService;
-    
+
     @Autowired
     private TransactionService transactionService;
-    
-    @Autowired
-    private CardServiceClient cardServiceClient;
 
     @PostMapping
     public ResponseEntity<CardRechargeResponse> initiateCardRecharge(
@@ -39,39 +36,31 @@ public class CardRechargeController {
             @RequestHeader(value = "X-Client-ID", required = false) String clientId,
             @RequestHeader(value = "X-Source-Service", required = false) String sourceService) {
 
-        log.info("💳 [CARD-RECHARGE] Demande reçue - Carte: {}, Montant: {}, OM: {}", 
-                request.getIdCarte(), request.getMontant(), request.getNumeroOrangeMoney());
+        log.info("💳 [CARD-RECHARGE] Demande reçue - Carte: {}, Montant: {}",
+                request.getIdCarte(), request.getMontant());
 
         try {
-            // 1. Validation
+            // Validation
             if (request.getMontant().compareTo(new BigDecimal("500")) < 0) {
                 return ResponseEntity.badRequest().body(createErrorResponse(request, "Montant minimum 500 FCFA"));
             }
-            
-            if (request.getMontant().compareTo(new BigDecimal("500000")) > 0) {
-                return ResponseEntity.badRequest().body(createErrorResponse(request, "Montant maximum 500k FCFA"));
-            }
 
-            // 2. Créer transaction de type CARD_RECHARGE
+            // Créer transaction
             Transaction transaction = createCardRechargeTransaction(request, clientId);
             transaction = transactionService.transactionRepository.save(transaction);
 
-            // 3. Préparer requête FreemoPay (réutiliser votre logique existante)
+            // Appeler FreemoPay
             PaymentRequest paymentRequest = new PaymentRequest(
-                request.getNumeroOrangeMoney(),
-                request.getMontant().doubleValue(),
-                transaction.getExternalId(),
-                "Recharge carte " + request.getIdCarte(),
-                "http://localhost:8084/webhook/freemopay" // Notre webhook existant
-            );
+                    request.getNumeroOrangeMoney(),
+                    request.getMontant().doubleValue(),
+                    transaction.getExternalId(),
+                    "Recharge carte " + request.getIdCarte(),
+                    "http://localhost:8084/webhook/freemopay");
 
-            // 4. Appeler FreemoPay via votre service existant
             PaymentResponse freemoResponse = depotMoneyService.createPayment2(paymentRequest);
-
-            // 5. Mettre à jour avec référence FreemoPay
             transactionService.updateFreemoReference(transaction.getId(), freemoResponse.getReference());
 
-            // 6. Préparer réponse
+            // Préparer réponse
             CardRechargeResponse response = new CardRechargeResponse();
             response.setRequestId(transaction.getExternalId());
             response.setIdCarte(request.getIdCarte());
@@ -87,29 +76,24 @@ public class CardRechargeController {
                 response.setMessage("Erreur: " + freemoResponse.getMessage());
             }
 
-            log.info("✅ [CARD-RECHARGE] Recharge initiée - RequestId: {}, FreemoRef: {}", 
-                    transaction.getExternalId(), freemoResponse.getReference());
-
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
             log.error("❌ [CARD-RECHARGE] Erreur: {}", e.getMessage(), e);
-            return ResponseEntity.badRequest().body(createErrorResponse(request, "Erreur technique: " + e.getMessage()));
+            return ResponseEntity.badRequest().body(createErrorResponse(request, "Erreur technique"));
         }
     }
 
     @GetMapping("/status/{requestId}")
     public ResponseEntity<CardRechargeResponse> getRechargeStatus(@PathVariable String requestId) {
         Transaction transaction = transactionService.findByExternalId(requestId);
-        
+
         if (transaction == null) {
             return ResponseEntity.notFound().build();
         }
 
         CardRechargeResponse response = new CardRechargeResponse();
         response.setRequestId(requestId);
-        response.setIdCarte(transaction.getIdCarte());
-        response.setMontant(transaction.getAmount());
         response.setStatus(transaction.getStatus());
         response.setTimestamp(LocalDateTime.now());
 
@@ -122,13 +106,13 @@ public class CardRechargeController {
         transaction.setExternalId("CARD_RECHARGE_" + request.getIdCarte() + "_" + System.currentTimeMillis());
         transaction.setPhoneNumber(request.getNumeroOrangeMoney());
         transaction.setAmount(request.getMontant());
-        transaction.setType("CARD_RECHARGE"); // Nouveau type
+        transaction.setType("CARD_RECHARGE");
         transaction.setStatus("PENDING");
-        transaction.setIdCarte(request.getIdCarte()); // Stocker l'ID carte
-        transaction.setCallbackUrl(request.getCallbackUrl()); // Stocker l'URL callback
+        transaction.setIdCarte(request.getIdCarte());
+        transaction.setCallbackUrl(request.getCallbackUrl());
         transaction.setCreatedAt(LocalDateTime.now());
         transaction.setUpdatedAt(LocalDateTime.now());
-        
+
         return transaction;
     }
 
@@ -141,4 +125,5 @@ public class CardRechargeController {
         response.setTimestamp(LocalDateTime.now());
         return response;
     }
+
 }
