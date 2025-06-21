@@ -1,6 +1,5 @@
 package com.serviceAgence.dto;
 
-
 import java.math.BigDecimal;
 import com.serviceAgence.enums.TransactionType;
 import jakarta.validation.constraints.DecimalMin;
@@ -14,6 +13,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 public class TransactionRequest {
+
     @NotNull
     private TransactionType type;
 
@@ -24,7 +24,11 @@ public class TransactionRequest {
     @NotBlank
     private String compteSource;
 
-    private String compteDestination; // Optionnel selon le type
+    // Pour transferts compte-à-compte
+    private String compteDestination;
+
+    // NOUVEAU : Pour transactions vers carte
+    private String numeroCarteDestination;
 
     @NotBlank
     private String idClient;
@@ -34,4 +38,37 @@ public class TransactionRequest {
 
     private String description;
     private String referenceExterne;
+
+    /**
+     * Détermine si la transaction nécessite une destination
+     */
+    public boolean requiresDestination() {
+        return type.requiresDestination();
+    }
+
+    /**
+     * Détermine si c'est une transaction vers carte
+     */
+    public boolean isCardTransaction() {
+        return numeroCarteDestination != null && !numeroCarteDestination.trim().isEmpty();
+    }
+
+    /**
+     * Détermine si c'est un transfert entre comptes
+     */
+    public boolean isAccountTransfer() {
+        return compteDestination != null && !compteDestination.trim().isEmpty();
+    }
+
+    /**
+     * Récupère la destination (compte ou carte)
+     */
+    public String getDestination() {
+        if (isCardTransaction()) {
+            return "CARTE:" + numeroCarteDestination;
+        } else if (isAccountTransfer()) {
+            return "COMPTE:" + compteDestination;
+        }
+        return null;
+    }
 }

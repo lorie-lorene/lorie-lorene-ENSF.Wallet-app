@@ -6,55 +6,39 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class QueueRabbit {
+    // queues agence vers Annonce
+    public static final String QUEUE_Statut_compte = "Statut-Demande-Queue";
+    public static final String QUEUE_Mt_passe = "Reset-PW-Queue";
+    public static final String QUEUE_Statut_tranfert = "Statut-Transaction-Queue";
+    public static final String QUEUE_Welcome = "Welcome-Queue";
 
-    public static final String QUEUE_Entrant = "Validation-Demande-Queue";
-    /* Agence --> Demande */
-    public static final String QUEUE_Sortant = "Response-Demande-Queue";
-    /* Agence --> Annonce */
-    public static final String QUEUE_Sortant2 = "Demande-Depot-confirm-Queue";
-
-    public static final String QUEUE_Sortant6 = "Demande-Retrait-confirm-Queue";
-    /* Agence --> Depot */
-    public static final String QUEUE_Sortant3 = "Demande-Transaction-confirm-Queue";
-    /* Agence --> User */
-    public static final String QUEUE_Sortant4 = "Demande-Connexion-Queue";
-    /* Agence --> Retrait */
-    public static final String QUEUE_Sortant5 = "Retrait-Agence-Queue";
+    // queue agence vers carte
+    public static final String QUEUE_Carte = "Transaction-Card-Queue";
 
     @Bean
     public Queue queue_1() {
-        return new Queue(QUEUE_Entrant);
+        return new Queue(QUEUE_Statut_compte);
     }
 
     @Bean
     public Queue queue_2() {
-        return new Queue(QUEUE_Sortant);
+        return new Queue(QUEUE_Statut_compte);
     }
 
     @Bean
     public Queue queue_3() {
-        return new Queue(QUEUE_Sortant2);
+        return new Queue(QUEUE_Statut_tranfert);
     }
 
     @Bean
     public Queue queue_4() {
-        return new Queue(QUEUE_Sortant3);
+        return new Queue(QUEUE_Welcome);
     }
 
     @Bean
     public Queue queue_5() {
-        return new Queue(QUEUE_Sortant4);
-    }
 
-    @Bean
-    public Queue queue_6() {
-        return new Queue(QUEUE_Sortant5);
-    }
-
-    @Bean
-    public Queue queue_7() {
-
-        return new Queue(QUEUE_Sortant6);
+        return new Queue(QUEUE_Carte);
     }
 
     /* configuration des queues de reception en cas d'absence */
@@ -72,21 +56,18 @@ public class QueueRabbit {
     }
 
     // reception d'une demande de depot
-    @Bean
-    public Queue queue_r_demande_depot() {
-        return new Queue("Validation-Demande-Depot-Queue");
-    }
+
     // reception d'une demande de transaction
 
     @Bean
     public Queue queue_r_demande_transaction() {
-        return new Queue("Validation-Demande-Transaction-Queue");
+        return new Queue("Demande-Transaction-Queue");
     }
     // reception d'une demande de retrait
 
     @Bean
     public Queue queue_r_demande_retrait() {
-        return new Queue("Retrait-Agence-Queue");
+        return new Queue("Demande-Retrait-Queue");
     }
 
     // reception d'une demande de mise a jour du mot de passe
@@ -96,8 +77,4 @@ public class QueueRabbit {
 
     }
 
-    @Bean
-    public Queue queue_r_demande_retrait_r() {
-        return new Queue("Validation-Demande-Retrait-Queue");
-    }
 }

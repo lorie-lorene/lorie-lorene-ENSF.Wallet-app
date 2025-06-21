@@ -1,4 +1,5 @@
 package com.serviceAgence.services;
+
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.HashMap;
@@ -22,27 +23,26 @@ public class FraisService {
 
     // Taux par défaut si non configuré dans l'agence
     private static final Map<TransactionType, BigDecimal> DEFAULT_RATES = Map.of(
-        TransactionType.DEPOT_PHYSIQUE, BigDecimal.ZERO, // Gratuit
-        TransactionType.RETRAIT_PHYSIQUE, new BigDecimal("1.5"), // 1.5%
-        TransactionType.RETRAIT_MOBILE_MONEY, new BigDecimal("2.5"), // 2.5%
-        TransactionType.TRANSFERT_INTERNE, new BigDecimal("1.0"), // 1%
-        TransactionType.TRANSFERT_EXTERNE, new BigDecimal("2.0"), // 3%
-        TransactionType.FRAIS_TENUE_COMPTE, BigDecimal.ZERO // Fixe mensuel
+            TransactionType.DEPOT_PHYSIQUE, BigDecimal.ZERO, // Gratuit
+            TransactionType.RETRAIT_PHYSIQUE, new BigDecimal("1.5"), // 1.5%
+            TransactionType.RETRAIT_CARTE, new BigDecimal("2.5"), // 2.5%
+            TransactionType.TRANSFERT_INTERNE, new BigDecimal("1.0"), // 1%
+            TransactionType.TRANSFERT_EXTERNE, new BigDecimal("2.0"), // 3%
+            TransactionType.FRAIS_TENUE_COMPTE, BigDecimal.ZERO // Fixe mensuel
     );
 
     // Frais minimums (en FCFA)
     private static final Map<TransactionType, BigDecimal> MIN_FEES = Map.of(
-        TransactionType.RETRAIT_PHYSIQUE, new BigDecimal("100"),
-        TransactionType.RETRAIT_MOBILE_MONEY, new BigDecimal("150"),
-        TransactionType.TRANSFERT_INTERNE, new BigDecimal("50"),
-        TransactionType.TRANSFERT_EXTERNE, new BigDecimal("500")
-    );
+            TransactionType.RETRAIT_PHYSIQUE, new BigDecimal("100"),
+            TransactionType.RETRAIT_CARTE, new BigDecimal("150"),
+            TransactionType.TRANSFERT_INTERNE, new BigDecimal("50"),
+            TransactionType.TRANSFERT_EXTERNE, new BigDecimal("500"));
 
     // Paliers dégressifs pour gros montants
     private static final Map<BigDecimal, BigDecimal> DISCOUNT_TIERS = Map.of(
-        new BigDecimal("1000000"), new BigDecimal("0.1"), // -10% au-dessus de 1M
-        new BigDecimal("5000000"), new BigDecimal("0.2"), // -20% au-dessus de 5M
-        new BigDecimal("10000000"), new BigDecimal("0.3") // -30% au-dessus de 10M
+            new BigDecimal("1000000"), new BigDecimal("0.1"), // -10% au-dessus de 1M
+            new BigDecimal("5000000"), new BigDecimal("0.2"), // -20% au-dessus de 5M
+            new BigDecimal("10000000"), new BigDecimal("0.3") // -30% au-dessus de 10M
     );
 
     private static final BigDecimal TVA_RATE = new BigDecimal("0.175"); // 17.5%
@@ -74,8 +74,8 @@ public class FraisService {
             // 6. Arrondi à 2 décimales
             BigDecimal fraisFinal = fraisAvecTVA.setScale(0, RoundingMode.HALF_UP);
 
-            log.debug("Frais calculés: base={}, minimum={}, discount={}, TVA={}, final={}", 
-                     fraisBase, fraisMinimum, discount, fraisAvecTVA, fraisFinal);
+            log.debug("Frais calculés: base={}, minimum={}, discount={}, TVA={}, final={}",
+                    fraisBase, fraisMinimum, discount, fraisAvecTVA, fraisFinal);
 
             return fraisFinal;
 
@@ -98,7 +98,7 @@ public class FraisService {
         } catch (Exception e) {
             log.warn("Impossible de récupérer taux agence {}: {}", idAgence, e.getMessage());
         }
-        
+
         return DEFAULT_RATES.getOrDefault(type, new BigDecimal("2.0"));
     }
 
@@ -119,13 +119,13 @@ public class FraisService {
     public Map<String, BigDecimal> estimateFrais(TransactionType type, BigDecimal montant, String idAgence) {
         BigDecimal frais = calculateFrais(type, montant, idAgence);
         BigDecimal montantNet = montant.subtract(frais);
-        
+
         Map<String, BigDecimal> estimation = new HashMap<>();
         estimation.put("montantBrut", montant);
         estimation.put("frais", frais);
         estimation.put("montantNet", montantNet);
         estimation.put("total", montant.add(frais));
-        
+
         return estimation;
     }
 

@@ -22,13 +22,13 @@ public class AgenceEventPublisher {
     @Autowired
     private RabbitTemplate rabbitTemplate;
 
-    private static final String AGENCE_EXCHANGE = "agence-exchange";
+    private static final String AGENCE_EXCHANGE = "Agence-exchange";
 
     /**
-     * Envoi réponse de création de compte vers UserService
+     * Envoi réponse de création de compte vers annonce
      */
-    public void sendRegistrationResponse(String idClient, String idAgence, String email, 
-                                       RegistrationProcessingResult result) {
+    public void sendRegistrationResponse(String idClient, String idAgence, String email,
+            RegistrationProcessingResult result) {
         try {
             RegistrationResponseEvent event = new RegistrationResponseEvent();
             event.setEventId(UUID.randomUUID().toString());
@@ -41,8 +41,8 @@ public class AgenceEventPublisher {
             event.setTimestamp(LocalDateTime.now());
 
             rabbitTemplate.convertAndSend(AGENCE_EXCHANGE, "agence.registration.response", event);
-            
-            log.info("Réponse création compte envoyée: client={}, statut={}", 
+
+            log.info("Réponse création compte envoyée: client={}, statut={}",
                     idClient, event.getStatut());
 
         } catch (Exception e) {
@@ -51,7 +51,7 @@ public class AgenceEventPublisher {
     }
 
     /**
-     * Envoi réponse de transaction vers UserService
+     * Envoi réponse de transaction vers annonce
      */
     public void sendTransactionResponse(String eventId, TransactionResult result, String numeroCompte) {
         try {
@@ -66,8 +66,35 @@ public class AgenceEventPublisher {
             event.setTimestamp(LocalDateTime.now());
 
             rabbitTemplate.convertAndSend(AGENCE_EXCHANGE, "agence.transaction.response", event);
-            
-            log.info("Réponse transaction envoyée: {} - Statut: {}", 
+
+            log.info("Réponse transaction envoyée: {} - Statut: {}",
+                    result.getTransactionId(), event.getStatut());
+
+        } catch (Exception e) {
+            log.error("Erreur envoi réponse transaction: {}", e.getMessage(), e);
+        }
+    }
+
+    
+
+    /**
+     * Envoi réponse de transaction vers carte
+     */
+    public void sendTransactionResponseCard(String eventId, TransactionResult result, String numeroCompte) {
+        try {
+            TransactionResponseEvent event = new TransactionResponseEvent();
+            event.setEventId(eventId);
+            event.setTransactionId(result.getTransactionId());
+            event.setStatut(result.isSuccess() ? "SUCCESS" : "FAILED");
+            event.setMessage(result.getMessage());
+            event.setMontant(result.getMontant());
+            event.setFrais(result.getFrais());
+            event.setNumeroCompte(numeroCompte);
+            event.setTimestamp(LocalDateTime.now());
+
+            rabbitTemplate.convertAndSend(AGENCE_EXCHANGE, "agence.transaction.card.response", event);
+
+            log.info("Réponse transaction envoyée: {} - Statut: {}",
                     result.getTransactionId(), event.getStatut());
 
         } catch (Exception e) {
@@ -76,7 +103,7 @@ public class AgenceEventPublisher {
     }
 
     /**
-     * Envoi réponse reset password vers UserService
+     * Envoi réponse reset password vers annonce
      */
     public void sendPasswordResetResponse(String cni, String newPassword, String email, String agence) {
         try {
@@ -89,7 +116,7 @@ public class AgenceEventPublisher {
             event.setTimestamp(LocalDateTime.now());
 
             rabbitTemplate.convertAndSend(AGENCE_EXCHANGE, "agence.password.reset.response", event);
-            
+
             log.info("Réponse reset password envoyée pour CNI: {}", cni);
 
         } catch (Exception e) {
@@ -103,7 +130,7 @@ public class AgenceEventPublisher {
     public void sendFraudAlert(String idClient, String alertType, String details) {
         try {
             // TODO: Implémenter événement fraude vers AdminService
-            log.warn("Alerte fraude détectée: client={}, type={}, détails={}", 
+            log.warn("Alerte fraude détectée: client={}, type={}, détails={}",
                     idClient, alertType, details);
 
         } catch (Exception e) {

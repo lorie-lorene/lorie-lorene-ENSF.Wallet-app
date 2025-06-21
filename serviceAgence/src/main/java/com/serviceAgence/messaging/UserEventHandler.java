@@ -27,9 +27,9 @@ public class UserEventHandler {
     /**
      * Réception des demandes de création de compte depuis UserService
      */
-    @RabbitListener(queues = "user-registration-queue")
+    @RabbitListener(queues = "Demande-Queue")
     public void handleUserRegistration(UserRegistrationEventReceived event) {
-        log.info("Réception demande création compte: client={}, agence={}", 
+        log.info("Réception demande création compte: client={}, agence={}",
                 event.getIdClient(), event.getIdAgence());
 
         try {
@@ -40,27 +40,27 @@ public class UserEventHandler {
             RegistrationProcessingResult result = agenceService.processRegistrationRequest(request);
 
             // Envoi de la réponse vers UserService
-            eventPublisher.sendRegistrationResponse(event.getIdClient(), event.getIdAgence(), 
-                                                   event.getEmail(), result);
+            eventPublisher.sendRegistrationResponse(event.getIdClient(), event.getIdAgence(),
+                    event.getEmail(), result);
 
-            log.info("Demande traitée: client={}, résultat={}", 
+            log.info("Demande traitée: client={}, résultat={}",
                     event.getIdClient(), result.isAccepted() ? "ACCEPTE" : "REFUSE");
 
         } catch (Exception e) {
             log.error("Erreur traitement demande création: {}", e.getMessage(), e);
-            
+
             // Envoi réponse d'erreur
             RegistrationProcessingResult errorResult = RegistrationProcessingResult.rejected(
-                "ERREUR_TECHNIQUE", "Erreur technique lors du traitement");
-            eventPublisher.sendRegistrationResponse(event.getIdClient(), event.getIdAgence(), 
-                                                   event.getEmail(), errorResult);
+                    "ERREUR_TECHNIQUE", "Erreur technique lors du traitement");
+            eventPublisher.sendRegistrationResponse(event.getIdClient(), event.getIdAgence(),
+                    event.getEmail(), errorResult);
         }
     }
 
     /**
      * Réception des demandes de reset password
      */
-    @RabbitListener(queues = "user-password-reset-queue")
+    @RabbitListener(queues = "Demande-Reset-passWord-Queue")
     public void handlePasswordResetRequest(PasswordResetRequestEvent event) {
         log.info("Réception demande reset password: client={}", event.getIdClient());
 
@@ -69,8 +69,8 @@ public class UserEventHandler {
             // Pour l'instant, génération d'un mot de passe temporaire
             String tempPassword = generateTemporaryPassword();
 
-            eventPublisher.sendPasswordResetResponse(event.getCni(), tempPassword, 
-                                                   event.getEmail(), "AGENCE_SYSTEM");
+            eventPublisher.sendPasswordResetResponse(event.getCni(), tempPassword,
+                    event.getEmail(), "AGENCE_SYSTEM");
 
             log.info("Reset password traité pour: {}", event.getIdClient());
 
@@ -115,12 +115,12 @@ public class UserEventHandler {
         // Génération plus sécurisée
         String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         StringBuilder password = new StringBuilder();
-        
+
         for (int i = 0; i < 8; i++) {
             int index = (int) (Math.random() * chars.length());
             password.append(chars.charAt(index));
         }
-        
+
         return "TEMP" + password.toString();
     }
 }

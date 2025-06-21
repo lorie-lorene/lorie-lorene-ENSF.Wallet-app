@@ -144,7 +144,7 @@
 		</dependency>
 
 		<!-- 🔄 SPRING CLOUD - Activez seulement si nécessaire -->
-		<!-- 
+		
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-actuator</artifactId>
@@ -164,7 +164,7 @@
 			<groupId>org.springframework.cloud</groupId>
 			<artifactId>spring-cloud-starter-bus-amqp</artifactId>
 		</dependency>
-		-->
+		
 	</dependencies>
 
 	<!-- ✅ DEPENDENCY MANAGEMENT -->
@@ -180,7 +180,7 @@
 			</dependency>
 			
 			<!-- Spring Cloud BOM - Activez seulement si vous utilisez Spring Cloud -->
-			<!-- 
+			
 			<dependency>
 				<groupId>org.springframework.cloud</groupId>
 				<artifactId>spring-cloud-dependencies</artifactId>
@@ -188,7 +188,7 @@
 				<type>pom</type>
 				<scope>import</scope>
 			</dependency>
-			-->
+			
 		</dependencies>
 	</dependencyManagement>
 
