@@ -62,7 +62,7 @@ public class UserService {
 
             // Send to AgenceService via RabbitMQ for validation
             try {
-                rabbit.sendClientRegistration(registration);
+                rabbit.sendRegistrationEvent(savedClient);
                 log.info("Registration sent to AgenceService for validation");
             } catch (Exception e) {
                 log.error("Failed to send registration to AgenceService: {}", e.getMessage());
