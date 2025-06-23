@@ -30,4 +30,17 @@ public class RegisterResponse {
     // Additional information
     private boolean documentsRequired;
     private String agencyContact;
+
+     public RegisterResponse(String status, String message) {
+        this.status = status;
+        this.message = message;
+        this.timestamp = LocalDateTime.now();
+    }
+
+    public RegisterResponse(String status, String message, String requestId) {
+        this.status = status;
+        this.message = message;
+        this.requestId = requestId;
+        this.timestamp = LocalDateTime.now();
+    }
 }

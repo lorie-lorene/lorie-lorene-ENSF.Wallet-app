@@ -345,7 +345,7 @@ public class UserServiceRabbit {
             String newSalt = UUID.randomUUID().toString().substring(0, 16);
 
             // Mise à jour sécurisée
-            repository.updatePassword(client.getIdClient(), newPasswordHash, LocalDateTime.now());
+            repository.updatePassword(client.getIdClient(), newPasswordHash, newSalt, LocalDateTime.now());
 
             log.info("Mot de passe mis à jour pour client: {}", client.getEmail());
 

@@ -188,6 +188,8 @@ public interface UserRepository extends MongoRepository<Client, String> {
            "]}")
     List<Client> findClientsWithIncompleteDocuments();
 
+    @Query("{'createdAt': {$gte: ?0, $lte: ?1}}")
+    List<Client> findByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
     // =====================================
     // AGGREGATION AND STATISTICS
     // =====================================
@@ -253,7 +255,7 @@ public interface UserRepository extends MongoRepository<Client, String> {
      */
     @Query("{'_id': ?0}")
     @Update("{'$set': {'passwordHash': ?1, 'passwordChangedAt': ?2}}")
-    void updatePassword(String clientId, String passwordHash, LocalDateTime passwordChangedAt);
+    void updatePassword(String clientId, String passwordHash, String salt, LocalDateTime passwordChangedAt);
 
     // =====================================
     // BULK OPERATIONS

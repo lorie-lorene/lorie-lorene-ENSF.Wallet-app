@@ -462,4 +462,8 @@ public class UserService {
             throw new BusinessValidationException("Invalid CNI format");
         }
     }
+
+    public RegisterResponse register(ClientRegistrationDTO registration) {
+    return registerClient(registration);
+}
 }
