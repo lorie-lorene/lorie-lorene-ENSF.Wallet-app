@@ -190,6 +190,43 @@ public interface UserRepository extends MongoRepository<Client, String> {
 
     @Query("{'createdAt': {$gte: ?0, $lte: ?1}}")
     List<Client> findByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
+
+       /**
+        * Count new clients created today
+        */
+       @Query(value = "{'createdAt': {$gte: ?0}}", count = true)
+       long countNewClientsToday(LocalDateTime startOfDay);
+
+       /**
+        * Find blocked or suspended clients
+        */
+       @Query("{'status': {$in: ['BLOCKED', 'SUSPENDED']}}")
+       List<Client> findBlockedOrSuspendedClients();
+
+       /**
+        * Check if active client exists by phone number
+        */
+       @Query(value = "{'numero': ?0, 'status': 'ACTIVE'}", exists = true)
+       boolean existsActiveClientByNumero(String numero);
+
+       /**
+        * Find clients with suspicious activity (multiple failed attempts recently)
+        */
+       @Query("{'loginAttempts': {$gte: 3}, 'lastFailedLogin': {$gte: ?0}}")
+       List<Client> findSuspiciousActivity(LocalDateTime since);
+
+       /**
+        * Find clients needing password change (old passwords)
+        */
+       @Query("{'passwordChangedAt': {$lt: ?0}}")
+       List<Client> findClientsNeedingPasswordChange(LocalDateTime cutoff);
+
+       /**
+        * Increment failed login attempts
+        */
+       @Query("{'_id': ?0}")
+       @Update("{'$inc': {'loginAttempts': 1}, '$set': {'lastFailedLogin': ?1}}")
+       void incrementFailedLoginAttempts(String clientId, LocalDateTime failedTime);
     // =====================================
     // AGGREGATION AND STATISTICS
     // =====================================
@@ -217,6 +254,7 @@ public interface UserRepository extends MongoRepository<Client, String> {
      */
     @Query(value = "{'status': 'ACTIVE', 'lastLogin': {$gte: ?0}}", count = true)
     long countActiveClientsLoggedInSince(LocalDateTime date);
+    
 
     // =====================================
     // UPDATE OPERATIONS

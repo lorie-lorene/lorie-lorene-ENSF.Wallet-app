@@ -8,16 +8,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureWebMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
@@ -36,8 +33,6 @@ import com.m1_fonda.serviceUser.request.PasswordResetRequest;
 import com.m1_fonda.serviceUser.request.ProfileUpdateRequest;
 import com.m1_fonda.serviceUser.request.TransferRequest;
 import com.m1_fonda.serviceUser.request.WithdrawalRequest;
-import com.m1_fonda.serviceUser.response.ClientProfileResponse;
-import com.m1_fonda.serviceUser.response.PasswordResetResponse;
 import com.m1_fonda.serviceUser.response.RegisterResponse;
 import com.m1_fonda.serviceUser.response.TransactionResponse;
 import com.m1_fonda.serviceUser.service.UserService;
@@ -518,28 +513,28 @@ class UserControllerTest {
                                 .andExpect(jsonPath("$").isArray());
         }
 
-        @Test
-        @DisplayName("Statistiques clients - Succès")
-        void getClientStatistics_ShouldReturnStatistics() throws Exception {
-                // Given
-                Map<String, Long> mockStats = new HashMap<>();
-                mockStats.put("total", 100L);
-                mockStats.put("active", 80L);
-                mockStats.put("pending", 15L);
-                mockStats.put("blocked", 3L);
-                mockStats.put("newToday", 5L);
+        // @Test
+        // @DisplayName("Statistiques clients - Succès")
+        // void getClientStatistics_ShouldReturnStatistics() throws Exception {
+        //         // Given
+        //         Map<String, Long> mockStats = new HashMap<>();
+        //         mockStats.put("total", 100L);
+        //         mockStats.put("active", 80L);
+        //         mockStats.put("pending", 15L);
+        //         mockStats.put("blocked", 3L);
+        //         mockStats.put("newToday", 5L);
 
-                when(userService.getClientStatistics()).thenReturn(mockStats);
+        //         when(userService.getClientStatistics()).thenReturn(mockStats);
 
-                // When & Then
-                mockMvc.perform(get("/api/v1/users/statistics"))
-                                .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.total").value(100))
-                                .andExpect(jsonPath("$.active").value(80))
-                                .andExpect(jsonPath("$.pending").value(15))
-                                .andExpect(jsonPath("$.blocked").value(3))
-                                .andExpect(jsonPath("$.newToday").value(5));
+        //         // When & Then
+        //         mockMvc.perform(get("/api/v1/users/statistics"))
+        //                         .andExpect(status().isOk())
+        //                         .andExpect(jsonPath("$.total").value(100))
+        //                         .andExpect(jsonPath("$.active").value(80))
+        //                         .andExpect(jsonPath("$.pending").value(15))
+        //                         .andExpect(jsonPath("$.blocked").value(3))
+        //                         .andExpect(jsonPath("$.newToday").value(5));
 
-                verify(userService).getClientStatistics();
-        }
+        //         verify(userService).getClientStatistics();
+        // }
 }

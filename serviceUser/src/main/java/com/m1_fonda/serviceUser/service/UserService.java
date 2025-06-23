@@ -326,12 +326,30 @@ public class UserService {
             long pendingClients = repository.findByStatus(ClientStatus.PENDING).size();
             long blockedClients = repository.findByStatus(ClientStatus.BLOCKED).size();
             long rejectedClients = repository.findByStatus(ClientStatus.REJECTED).size();
+            long suspendedClients = repository.findByStatus(ClientStatus.SUSPENDED).size();
             
             // Count new clients today
             LocalDateTime startOfDay = LocalDateTime.now().truncatedTo(ChronoUnit.DAYS);
-            long newClientsToday = repository.findAll().stream()
-                    .filter(client -> client.getCreatedAt().isAfter(startOfDay))
-                    .count();
+            long newClientsToday = repository.countNewClientsToday(startOfDay);
+            
+            // Count new clients this week
+            LocalDateTime startOfWeek = LocalDateTime.now().minusDays(7).truncatedTo(ChronoUnit.DAYS);
+            long newClientsThisWeek = repository.countNewClientsToday(startOfWeek);
+            
+            // Count new clients this month
+            LocalDateTime startOfMonth = LocalDateTime.now().minusDays(30).truncatedTo(ChronoUnit.DAYS);
+            long newClientsThisMonth = repository.countNewClientsToday(startOfMonth);
+            
+            // KYC statistics (active = KYC verified)
+            long kycVerifiedClients = activeClients;
+            long kycPendingClients = pendingClients;
+            
+            // Activity statistics
+            LocalDateTime todayStart = LocalDateTime.now().truncatedTo(ChronoUnit.DAYS);
+            long clientsLoggedInToday = repository.findClientsLoggedInSince(todayStart).size();
+            
+            LocalDateTime weekStart = LocalDateTime.now().minusDays(7);
+            long clientsLoggedInThisWeek = repository.findClientsLoggedInSince(weekStart).size();
 
             return ClientStatisticsResponse.builder()
                     .totalClients(totalClients)
@@ -339,7 +357,14 @@ public class UserService {
                     .pendingClients(pendingClients)
                     .blockedClients(blockedClients)
                     .rejectedClients(rejectedClients)
+                    .suspendedClients(suspendedClients)
                     .newClientsToday(newClientsToday)
+                    .newClientsThisWeek(newClientsThisWeek)
+                    .newClientsThisMonth(newClientsThisMonth)
+                    .kycVerifiedClients(kycVerifiedClients)
+                    .kycPendingClients(kycPendingClients)
+                    .clientsLoggedInToday(clientsLoggedInToday)
+                    .clientsLoggedInThisWeek(clientsLoggedInThisWeek)
                     .generatedAt(LocalDateTime.now())
                     .build();
 
@@ -348,6 +373,7 @@ public class UserService {
             throw new ServiceException("Failed to generate statistics");
         }
     }
+
 
     // =====================================
     // 🔄 SESSION MANAGEMENT
@@ -461,6 +487,75 @@ public class UserService {
         if (!client.getCni().matches("\\d{8,12}")) {
             throw new BusinessValidationException("Invalid CNI format");
         }
+    }
+
+    /**
+ * Update client status with reason
+ */
+@Transactional
+public void updateStatus(String clientId, ClientStatus newStatus, String reason) {
+    Optional<Client> clientOpt = repository.findById(clientId);
+    if (clientOpt.isPresent()) {
+        Client client = clientOpt.get();
+        ClientStatus oldStatus = client.getStatus();
+        client.setStatus(newStatus);
+        repository.save(client);
+        
+        log.info("Client {} status updated from {} to {} - Reason: {}", 
+                clientId, oldStatus, newStatus, reason);
+    } else {
+        log.error("Attempted to update status for non-existent client: {}", clientId);
+        throw new BusinessValidationException("Client not found");
+    }
+}
+
+/**
+ * Increment failed login attempts
+ */
+@Transactional
+public void incrementFailedLoginAttempts(String clientId, LocalDateTime failedTime) {
+    try {
+        repository.incrementFailedLoginAttempts(clientId, failedTime);
+        
+        // Check if client should be blocked
+        Optional<Client> clientOpt = repository.findById(clientId);
+        if (clientOpt.isPresent()) {
+            Client client = clientOpt.get();
+            if (client.getLoginAttempts() >= 3) { // Max attempts reached
+                client.setStatus(ClientStatus.BLOCKED);
+                repository.save(client);
+                log.warn("Client {} blocked due to too many failed login attempts", clientId);
+            }
+        }
+        
+        log.info("Failed login attempt recorded for client: {}", clientId);
+    } catch (Exception e) {
+        log.error("Failed to increment login attempts for client {}: {}", clientId, e.getMessage());
+        throw new ServiceException("Failed to record login attempt");
+    }
+}
+
+    /**
+     * Activate account
+     */
+    @Transactional
+    public void activateAccount(String clientId) {
+        updateStatus(clientId, ClientStatus.ACTIVE, "Account activated");
+    }
+
+    /**
+     * Reject account with reason
+     */
+    @Transactional
+    public void rejectAccount(String clientId, String reason) {
+        updateStatus(clientId, ClientStatus.REJECTED, reason);
+    }
+
+    /**
+     * Count new clients today
+     */
+    public long countNewClientsToday(LocalDateTime startOfDay) {
+        return repository.countNewClientsToday(startOfDay);
     }
 
     public RegisterResponse register(ClientRegistrationDTO registration) {
