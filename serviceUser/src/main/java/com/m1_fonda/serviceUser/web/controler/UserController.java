@@ -1,124 +1,260 @@
 package com.m1_fonda.serviceUser.web.controler;
 
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
 import com.m1_fonda.serviceUser.model.Client;
 import com.m1_fonda.serviceUser.pojo.ClientRegistrationDTO;
 import com.m1_fonda.serviceUser.pojo.ClientStatus;
 import com.m1_fonda.serviceUser.repository.UserRepository;
-import com.m1_fonda.serviceUser.request.DepositRequest;
-import com.m1_fonda.serviceUser.request.PasswordResetRequest;
-import com.m1_fonda.serviceUser.request.ProfileUpdateRequest;
-import com.m1_fonda.serviceUser.request.TransferRequest;
-import com.m1_fonda.serviceUser.request.WithdrawalRequest;
-import com.m1_fonda.serviceUser.response.ClientProfileResponse;
-import com.m1_fonda.serviceUser.response.ClientStatisticsResponse;
-import com.m1_fonda.serviceUser.response.ErrorResponse;
-import com.m1_fonda.serviceUser.response.PasswordResetResponse;
-import com.m1_fonda.serviceUser.response.RegisterResponse;
-import com.m1_fonda.serviceUser.response.RegistrationStatusResponse;
-import com.m1_fonda.serviceUser.response.TransactionResponse;
-import com.m1_fonda.serviceUser.response.ValidationErrorResponse;
+import com.m1_fonda.serviceUser.request.*;
+import com.m1_fonda.serviceUser.response.*;
+import com.m1_fonda.serviceUser.service.AuthenticationService;
+import com.m1_fonda.serviceUser.service.JwtService;
 import com.m1_fonda.serviceUser.service.UserService;
 import com.m1_fonda.serviceUser.service.UserServiceRabbit;
 import com.m1_fonda.serviceUser.service.exceptions.BusinessValidationException;
 import com.m1_fonda.serviceUser.service.exceptions.ServiceException;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
-import lombok.AllArgsConstructor;
+
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-import java.nio.file.AccessDeniedException;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.messaging.handler.annotation.support.MethodArgumentNotValidException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.validation.annotation.Validated;
-//import org.springframework.web.bind.annotation.CrossOrigin;
-import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.validation.BindingResult;
+import org.springframework.web.bind.annotation.*;
 
-@AllArgsConstructor
+import java.time.LocalDateTime;
+import java.util.*;
+
+/**
+ * 🏦 User Controller - Complete REST API for User Management
+ * Handles authentication, registration, profile management, and financial operations
+ */
 @RestController
 @RequestMapping("/api/v1/users")
-@Validated
+@Tag(name = "User Management", description = "User authentication, registration, and profile management")
 @Slf4j
-// @CrossOrigin(origins = "${app.cors.allowed-origins}")
+@RequiredArgsConstructor
+@CrossOrigin(origins = {"http://localhost:3000", "http://localhost:8081"})
 public class UserController {
 
-    @Autowired
-    private UserRepository userService;
+    private final UserService userService;
+    private final AuthenticationService authenticationService;
+    private final JwtService jwtService;
+    private final UserServiceRabbit userServiceRabbit;
+    private final UserRepository userRepository;
 
-    @Autowired
-    private UserServiceRabbit userServiceRabbit;
-
-    @Autowired
-    private UserService repository;
+    // =====================================
+    // 🔐 AUTHENTICATION ENDPOINTS
+    // =====================================
 
     /**
-     * Enregistrement d'un nouveau client
+     * User login/authentication
      */
-    @PostMapping("/register")
-    @Operation(summary = "Créer un nouveau compte client", description = "Enregistre une demande de création de compte qui sera validée par l'agence")
-    @ApiResponses({
-            @ApiResponse(responseCode = "202", description = "Demande acceptée et en cours de traitement"),
-            @ApiResponse(responseCode = "400", description = "Données invalides"),
-            @ApiResponse(responseCode = "409", description = "Compte déjà existant"),
-            @ApiResponse(responseCode = "503", description = "Service temporairement indisponible")
+    @PostMapping("/login")
+    @Operation(summary = "User login", description = "Authenticate user with email/phone and password")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Login successful"),
+        @ApiResponse(responseCode = "401", description = "Invalid credentials"),
+        @ApiResponse(responseCode = "423", description = "Account locked"),
+        @ApiResponse(responseCode = "403", description = "Account not active")
     })
-    public ResponseEntity<RegisterResponse> register(
-            @Valid @RequestBody ClientRegistrationDTO request,
-            HttpServletRequest httpRequest) {
-
+    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest loginRequest, BindingResult result) {
         try {
-            log.info("Nouvelle demande d'enregistrement: {} depuis IP: {}",
-                    request.getEmail(), getClientIpAddress(httpRequest));
+            // Validate request
+            if (result.hasErrors()) {
+                return ResponseEntity.badRequest()
+                    .body(createValidationErrorResponse(result));
+            }
 
-            RegisterResponse response = repository.register(request);
+            log.info("Login attempt for identifier: {}", loginRequest.getIdentifier());
 
-            log.info("Demande enregistrée avec succès: {}", request.getEmail());
-
-            return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
+            LoginResponse response = authenticationService.authenticate(loginRequest);
+            
+            return ResponseEntity.ok(response);
 
         } catch (BusinessValidationException e) {
-            log.warn("Validation échouée pour {}: {}", request.getEmail(), e.getMessage());
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new RegisterResponse("REJECTED", e.getMessage()));
-
-        } catch (ServiceException e) {
-            log.error("Erreur service pour {}: {}", request.getEmail(), e.getMessage());
-            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                    .body(new RegisterResponse("ERROR", "Service temporairement indisponible"));
+            log.warn("Login failed: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ErrorResponse.builder()
+                    .error("AUTHENTICATION_FAILED")
+                    .message(e.getMessage())
+                    .timestamp(LocalDateTime.now())
+                    .path("/api/v1/users/login")
+                    .build());
+        } catch (Exception e) {
+            log.error("Unexpected login error: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ErrorResponse.builder()
+                    .error("INTERNAL_ERROR")
+                    .message("Login failed due to server error")
+                    .timestamp(LocalDateTime.now())
+                    .path("/api/v1/users/login")
+                    .build());
         }
     }
 
     /**
-     * Vérification statut d'une demande
+     * Refresh authentication token
+     */
+    @PostMapping("/refresh-token")
+    @Operation(summary = "Refresh token", description = "Get new access token using refresh token")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Token refreshed successfully"),
+        @ApiResponse(responseCode = "401", description = "Invalid refresh token")
+    })
+    public ResponseEntity<?> refreshToken(@Valid @RequestBody RefreshTokenRequest request) {
+        try {
+            LoginResponse response = authenticationService.refreshToken(request.getRefreshToken());
+            return ResponseEntity.ok(response);
+
+        } catch (BusinessValidationException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ErrorResponse.builder()
+                    .error("TOKEN_REFRESH_FAILED")
+                    .message(e.getMessage())
+                    .timestamp(LocalDateTime.now())
+                    .path("/api/v1/users/refresh-token")
+                    .build());
+        }
+    }
+
+    /**
+     * User logout
+     */
+    @PostMapping("/logout")
+    @Operation(summary = "User logout", description = "Logout user and invalidate token")
+    @SecurityRequirement(name = "bearerAuth")
+    public ResponseEntity<?> logout(HttpServletRequest request) {
+        try {
+            String authHeader = request.getHeader("Authorization");
+            String token = jwtService.extractTokenFromHeader(authHeader);
+            
+            if (token != null) {
+                Map<String, Object> response = authenticationService.logout(token);
+                return ResponseEntity.ok(response);
+            }
+            
+            return ResponseEntity.ok(Map.of("message", "Logout successful"));
+
+        } catch (Exception e) {
+            log.error("Logout error: {}", e.getMessage());
+            return ResponseEntity.ok(Map.of("message", "Logout completed"));
+        }
+    }
+
+    /**
+     * Check authentication status
+     */
+    @GetMapping("/auth-status")
+    @Operation(summary = "Check authentication status", description = "Verify if user token is valid")
+    @SecurityRequirement(name = "bearerAuth")
+    public ResponseEntity<AuthStatusResponse> checkAuthStatus(HttpServletRequest request) {
+        try {
+            String authHeader = request.getHeader("Authorization");
+            String token = jwtService.extractTokenFromHeader(authHeader);
+            
+            if (token == null || !jwtService.isTokenValid(token)) {
+                return ResponseEntity.ok(AuthStatusResponse.builder()
+                    .authenticated(false)
+                    .tokenExpired(true)
+                    .build());
+            }
+
+            String clientId = jwtService.extractClientId(token);
+            String email = jwtService.extractSubject(token);
+            String status = jwtService.extractStatus(token);
+            
+            Optional<Client> clientOpt = userRepository.findById(clientId);
+            
+            AuthStatusResponse response = AuthStatusResponse.builder()
+                .authenticated(true)
+                .clientId(clientId)
+                .email(email)
+                .status(status)
+                .isKycVerified(ClientStatus.ACTIVE.toString().equals(status))
+                .tokenExpired(false)
+                .tokenValidityRemaining(jwtService.getRemainingTokenTime(token))
+                .lastLogin(clientOpt.map(Client::getLastLogin).orElse(null))
+                .build();
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            log.error("Auth status check failed: {}", e.getMessage());
+            return ResponseEntity.ok(AuthStatusResponse.builder()
+                .authenticated(false)
+                .tokenExpired(true)
+                .build());
+        }
+    }
+
+    // =====================================
+    // 👤 REGISTRATION ENDPOINTS (Public)
+    // =====================================
+
+    /**
+     * Register new user
+     */
+    @PostMapping("/register")
+    @Operation(summary = "Register new user", description = "Register a new user account")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "202", description = "Registration submitted successfully"),
+        @ApiResponse(responseCode = "400", description = "Invalid registration data"),
+        @ApiResponse(responseCode = "409", description = "User already exists")
+    })
+    public ResponseEntity<?> register(@Valid @RequestBody ClientRegistrationDTO registration, BindingResult result) {
+        try {
+            // Validate request
+            if (result.hasErrors()) {
+                return ResponseEntity.badRequest()
+                    .body(createValidationErrorResponse(result));
+            }
+
+            log.info("Registration attempt for email: {}", registration.getEmail());
+
+            // Process registration
+            RegisterResponse response = userService.registerClient(registration);
+            
+            return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
+
+        } catch (BusinessValidationException e) {
+            log.warn("Registration failed: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.builder()
+                    .error("REGISTRATION_FAILED")
+                    .message(e.getMessage())
+                    .timestamp(LocalDateTime.now())
+                    .path("/api/v1/users/register")
+                    .build());
+        } catch (Exception e) {
+            log.error("Registration error: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ErrorResponse.builder()
+                    .error("INTERNAL_ERROR")
+                    .message("Registration failed due to server error")
+                    .timestamp(LocalDateTime.now())
+                    .path("/api/v1/users/register")
+                    .build());
+        }
+    }
+
+    /**
+     * Check registration status
      */
     @GetMapping("/registration-status")
-    @Operation(summary = "Vérifier le statut d'une demande d'enregistrement")
-    public ResponseEntity<RegistrationStatusResponse> checkRegistrationStatus(
-            @RequestParam @Email String email) {
-
+    @Operation(summary = "Check registration status", description = "Check the status of a user registration")
+    public ResponseEntity<?> checkRegistrationStatus(@RequestParam @Email String email) {
         try {
             Optional<Client> client = userService.findByEmail(email);
 
@@ -130,26 +266,164 @@ public class UserController {
                 return ResponseEntity.ok(response);
             } else {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body(new RegistrationStatusResponse("NOT_FOUND", "Aucune demande trouvée", null));
+                        .body(new RegistrationStatusResponse("NOT_FOUND", "No registration found for this email", null));
             }
 
         } catch (Exception e) {
-            log.error("Erreur vérification statut: {}", e.getMessage(), e);
+            log.error("Error checking registration status: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new RegistrationStatusResponse("ERROR", "Erreur technique", null));
+                    .body(new RegistrationStatusResponse("ERROR", "Technical error occurred", null));
         }
     }
 
     // =====================================
-    // ENDPOINTS OPÉRATIONS FINANCIÈRES
+    // 🔒 PROFILE MANAGEMENT (Authenticated)
     // =====================================
 
     /**
-     * Effectuer un dépôt a revoir
+     * Get user profile
+     */
+    @GetMapping("/profile")
+    @PreAuthorize("hasRole('CLIENT')")
+    @Operation(summary = "Get user profile", description = "Get authenticated user's profile")
+    @SecurityRequirement(name = "bearerAuth")
+    public ResponseEntity<?> getProfile(Authentication authentication) {
+        try {
+            String clientId = extractClientId(authentication);
+
+            Optional<Client> client = userService.findById(clientId);
+
+            if (client.isPresent()) {
+                ClientProfileResponse profile = mapToProfileResponse(client.get());
+                return ResponseEntity.ok(profile);
+            } else {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ErrorResponse.builder()
+                        .error("USER_NOT_FOUND")
+                        .message("User profile not found")
+                        .timestamp(LocalDateTime.now())
+                        .build());
+            }
+
+        } catch (Exception e) {
+            log.error("Error retrieving profile: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ErrorResponse.builder()
+                    .error("INTERNAL_ERROR")
+                    .message("Failed to retrieve profile")
+                    .timestamp(LocalDateTime.now())
+                    .build());
+        }
+    }
+
+    /**
+     * Update user profile
+     */
+    @PutMapping("/profile/{id}")
+    @PreAuthorize("hasRole('CLIENT')")
+    @Operation(summary = "Update user profile", description = "Update user profile information")
+    @SecurityRequirement(name = "bearerAuth")
+    public ResponseEntity<?> updateProfile(
+            @PathVariable String id,
+            @Valid @RequestBody ProfileUpdateRequest request,
+            Authentication authentication) {
+
+        try {
+            // Verify user can only update their own profile
+            String authenticatedClientId = extractClientId(authentication);
+            if (!authenticatedClientId.equals(id)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ErrorResponse.builder()
+                        .error("ACCESS_DENIED")
+                        .message("You can only update your own profile")
+                        .timestamp(LocalDateTime.now())
+                        .build());
+            }
+
+            Client updatedClient = userService.updateProfile(id, request);
+            ClientProfileResponse response = mapToProfileResponse(updatedClient);
+            
+            return ResponseEntity.ok(response);
+
+        } catch (BusinessValidationException e) {
+            return ResponseEntity.badRequest()
+                .body(ErrorResponse.builder()
+                    .error("VALIDATION_ERROR")
+                    .message(e.getMessage())
+                    .timestamp(LocalDateTime.now())
+                    .build());
+        } catch (Exception e) {
+            log.error("Profile update error: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ErrorResponse.builder()
+                    .error("INTERNAL_ERROR")
+                    .message("Profile update failed")
+                    .timestamp(LocalDateTime.now())
+                    .build());
+        }
+    }
+
+    /**
+     * Change password
+     */
+    @PostMapping("/change-password")
+    @PreAuthorize("hasRole('CLIENT')")
+    @Operation(summary = "Change password", description = "Change user password")
+    @SecurityRequirement(name = "bearerAuth")
+    public ResponseEntity<?> changePassword(
+            @Valid @RequestBody ChangePasswordRequest request,
+            Authentication authentication) {
+
+        try {
+            // Validate password confirmation
+            if (!request.isPasswordConfirmed()) {
+                return ResponseEntity.badRequest()
+                    .body(ErrorResponse.builder()
+                        .error("PASSWORD_MISMATCH")
+                        .message("New password and confirmation do not match")
+                        .timestamp(LocalDateTime.now())
+                        .build());
+            }
+
+            String clientId = extractClientId(authentication);
+            
+            Map<String, Object> response = authenticationService.changePassword(
+                clientId,
+                request.getCurrentPassword(),
+                request.getNewPassword()
+            );
+            
+            return ResponseEntity.ok(response);
+
+        } catch (BusinessValidationException e) {
+            return ResponseEntity.badRequest()
+                .body(ErrorResponse.builder()
+                    .error("PASSWORD_CHANGE_FAILED")
+                    .message(e.getMessage())
+                    .timestamp(LocalDateTime.now())
+                    .build());
+        } catch (Exception e) {
+            log.error("Password change error: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ErrorResponse.builder()
+                    .error("INTERNAL_ERROR")
+                    .message("Password change failed")
+                    .timestamp(LocalDateTime.now())
+                    .build());
+        }
+    }
+
+    // =====================================
+    // 💰 FINANCIAL OPERATIONS (Authenticated)
+    // =====================================
+
+    /**
+     * Make a deposit
      */
     @PostMapping("/deposit")
     @PreAuthorize("hasRole('CLIENT')")
-    @Operation(summary = "Effectuer un dépôt sur une carte de credit")
+    @Operation(summary = "Make a deposit", description = "Deposit money to account")
+    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<TransactionResponse> deposit(
             @Valid @RequestBody DepositRequest request,
             Authentication authentication) {
@@ -157,7 +431,7 @@ public class UserController {
         try {
             String clientId = extractClientId(authentication);
 
-            log.info("Demande dépôt: {} FCFA sur la carte {} par client {}",
+            log.info("Deposit request: {} FCFA to account {} by client {}",
                     request.getMontant(), request.getNumeroCompte(), clientId);
 
             TransactionResponse response = userServiceRabbit.sendDepot(request, clientId);
@@ -170,16 +444,17 @@ public class UserController {
 
         } catch (ServiceException e) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                    .body(new TransactionResponse(null, "ERROR", "Service indisponible", null, LocalDateTime.now()));
+                    .body(new TransactionResponse(null, "ERROR", "Service unavailable", null, LocalDateTime.now()));
         }
     }
 
     /**
-     * Effectuer un retrait de son compte pour la carte ..
+     * Make a withdrawal
      */
     @PostMapping("/withdrawal")
     @PreAuthorize("hasRole('CLIENT')")
-    @Operation(summary = "Effectuer un retrait d'un compte pour sa carte de credit")
+    @Operation(summary = "Make a withdrawal", description = "Withdraw money from account")
+    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<TransactionResponse> withdrawal(
             @Valid @RequestBody WithdrawalRequest request,
             Authentication authentication) {
@@ -187,7 +462,7 @@ public class UserController {
         try {
             String clientId = extractClientId(authentication);
 
-            log.info("Demande retrait: {} FCFA du compte {} par client {}",
+            log.info("Withdrawal request: {} FCFA from account {} by client {}",
                     request.getMontant(), request.getNumeroCompte(), clientId);
 
             TransactionResponse response = userServiceRabbit.sendRetrait(request, clientId);
@@ -200,16 +475,17 @@ public class UserController {
 
         } catch (ServiceException e) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                    .body(new TransactionResponse(null, "ERROR", "Service indisponible", null, LocalDateTime.now()));
+                    .body(new TransactionResponse(null, "ERROR", "Service unavailable", null, LocalDateTime.now()));
         }
     }
 
     /**
-     * Effectuer un transfert inter-comptes
+     * Make a transfer
      */
     @PostMapping("/transfer")
     @PreAuthorize("hasRole('CLIENT')")
-    @Operation(summary = "Effectuer un transfert entre comptes")
+    @Operation(summary = "Make a transfer", description = "Transfer money between accounts")
+    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<TransactionResponse> transfer(
             @Valid @RequestBody TransferRequest request,
             Authentication authentication) {
@@ -217,7 +493,7 @@ public class UserController {
         try {
             String clientId = extractClientId(authentication);
 
-            log.info("Demande transfert: {} FCFA de {} vers {} par client {}",
+            log.info("Transfer request: {} FCFA from {} to {} by client {}",
                     request.getMontant(), request.getNumeroCompteSend(),
                     request.getNumeroCompteReceive(), clientId);
 
@@ -231,293 +507,168 @@ public class UserController {
 
         } catch (ServiceException e) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                    .body(new TransactionResponse(null, "ERROR", "Service indisponible", null, LocalDateTime.now()));
+                    .body(new TransactionResponse(null, "ERROR", "Service unavailable", null, LocalDateTime.now()));
         }
     }
 
     // =====================================
-    // ENDPOINTS GESTION COMPTE
+    // 🔐 PASSWORD RESET (Public)
     // =====================================
 
     /**
-     * Récupérer profil utilisateur
-     */
-    @GetMapping("/profile")
-    @PreAuthorize("hasRole('CLIENT')")
-    @Operation(summary = "Récupérer le profil de l'utilisateur connecté")
-    public ResponseEntity<ClientProfileResponse> getProfile(Authentication authentication) {
-
-        try {
-            String clientId = extractClientId(authentication);
-
-            Optional<Client> client = userService.findById(clientId);
-
-            if (client.isPresent()) {
-                ClientProfileResponse profile = mapToProfileResponse(client.get());
-                return ResponseEntity.ok(profile);
-            } else {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
-            }
-
-        } catch (Exception e) {
-            log.error("Erreur récupération profil: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
-    }
-
-    /**
-     * Mettre à jour le profil
-     */
-    @PutMapping("/profile/{id}")
-    public ResponseEntity<Client> updateProfile(
-            @PathVariable String id,
-            @RequestBody ProfileUpdateRequest request) {
-
-        try {
-            // Chercher le client
-            Client client = userService.findById(id).orElse(null);
-            if (client == null) {
-                return ResponseEntity.notFound().build();
-            }
-
-            // Mise à jour simple des champs
-            if (request.getEmail() != null) {
-                Optional<Client> existingClientOpt = userService.findByEmail(request.getEmail());
-                if (existingClientOpt.isPresent()) {
-                    Client existingClient = existingClientOpt.get();
-                    if (!existingClient.getIdClient().equals(id)) {
-                        return ResponseEntity.badRequest().build();
-                    }
-                }
-                client.setEmail(request.getEmail());
-            }
-
-            if (request.getNumero() != null && !request.getNumero().trim().isEmpty()) {
-                Optional<Client> existingClientOpt = userService.findByNumero(request.getNumero());
-
-                if (existingClientOpt.isPresent()) {
-                    Client existingClient = existingClientOpt.get(); // Récupérer le Client
-                    if (!existingClient.getIdClient().equals(id)) {
-                        return ResponseEntity.badRequest().build(); // Numéro déjà utilisé
-                    }
-                }
-
-                client.setNumero(request.getNumero());
-            }
-
-            if (request.getNom() != null) {
-                client.setNom(request.getNom());
-            }
-
-            if (request.getPrenom() != null) {
-                client.setPrenom(request.getPrenom());
-            }
-
-            // Sauvegarder
-            Client updatedClient = userService.save(client);
-
-            log.info("Profil mis à jour pour client: {}", id);
-            return ResponseEntity.ok(updatedClient);
-
-        } catch (Exception e) {
-            log.error("Erreur mise à jour profil: {}", e.getMessage(), e);
-            return ResponseEntity.badRequest().build();
-        }
-    }
-
-    /**
-     * Demande de reset password
+     * Request password reset
      */
     @PostMapping("/password-reset/request")
-    @Operation(summary = "Demander une réinitialisation de mot de passe")
-    public ResponseEntity<PasswordResetResponse> requestPasswordReset(
-            @Valid @RequestBody PasswordResetRequest request) {
-
+    @Operation(summary = "Request password reset", description = "Request password reset for user account")
+    public ResponseEntity<?> requestPasswordReset(@Valid @RequestBody PasswordResetRequest request) {
         try {
-            log.info("Demande reset password pour: {}", request.getEmail());
-
-            userServiceRabbit.sendPasswordResetRequest(request);
-
-            PasswordResetResponse response = new PasswordResetResponse(
-                    "SUCCESS",
-                    "Un email de réinitialisation a été envoyé à votre adresse",
-                    LocalDateTime.now());
-
+            PasswordResetResponse response = userService.requestPasswordReset(request);
             return ResponseEntity.ok(response);
 
         } catch (BusinessValidationException e) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new PasswordResetResponse("ERROR", e.getMessage(), LocalDateTime.now()));
-
+            return ResponseEntity.badRequest()
+                .body(ErrorResponse.builder()
+                    .error("PASSWORD_RESET_FAILED")
+                    .message(e.getMessage())
+                    .timestamp(LocalDateTime.now())
+                    .build());
         } catch (Exception e) {
-            log.error("Erreur demande reset password: {}", e.getMessage(), e);
+            log.error("Password reset error: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new PasswordResetResponse("ERROR", "Erreur technique", LocalDateTime.now()));
+                .body(ErrorResponse.builder()
+                    .error("INTERNAL_ERROR")
+                    .message("Password reset request failed")
+                    .timestamp(LocalDateTime.now())
+                    .build());
         }
     }
 
     // =====================================
-    // ENDPOINTS ADMINISTRATIFS
+    // 📊 ADMIN ENDPOINTS (Admin Only)
     // =====================================
 
     /**
-     * Rechercher des clients (Admin uniquement)
-     */
-    /**
-     * SIMPLE : Recherche clients SANS pagination complexe
+     * Search clients (Admin only)
      */
     @GetMapping("/search")
-    public ResponseEntity<List<Client>> searchClients(
-            @RequestParam(required = false) String searchTerm,
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Search clients", description = "Search for clients by term")
+    @SecurityRequirement(name = "bearerAuth")
+    public ResponseEntity<List<ClientProfileResponse>> searchClients(
+            @RequestParam String searchTerm,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
 
         try {
-            List<Client> allClients = userService.findAll();
-            List<Client> filteredClients = new ArrayList<>();
-
-            // Filtrage simple par terme de recherche
-            if (searchTerm != null && !searchTerm.trim().isEmpty()) {
-                String term = searchTerm.toLowerCase();
-
-                for (Client client : allClients) {
-                    // Rechercher dans nom, prénom, email
-                    boolean matches = client.getNom().toLowerCase().contains(term) ||
-                            client.getPrenom().toLowerCase().contains(term) ||
-                            client.getEmail().toLowerCase().contains(term);
-
-                    if (matches) {
-                        filteredClients.add(client);
-                    }
-                }
-            } else {
-                filteredClients = allClients;
-            }
-
-            // Pagination simple
-            int start = page * size;
-            int end = Math.min(start + size, filteredClients.size());
-
-            if (start >= filteredClients.size()) {
-                return ResponseEntity.ok(new ArrayList<>());
-            }
-
-            List<Client> pagedClients = filteredClients.subList(start, end);
-            return ResponseEntity.ok(pagedClients);
-
-        } catch (Exception e) {
-            log.error("Erreur recherche clients: {}", e.getMessage(), e);
-            return ResponseEntity.badRequest().build();
-        }
-    }
-
-    /**
-     * Statistiques clients (Admin uniquement)
-     */
-    @GetMapping("/statistics")
-    @PreAuthorize("hasRole('ADMIN')")
-    @Operation(summary = "Statistiques des clients (Admin)")
-    public ResponseEntity<ClientStatisticsResponse> getClientStatistics() {
-
-        try {
-            Map<String, Long> stats = repository.getClientStatistics();
-
-            ClientStatisticsResponse response = new ClientStatisticsResponse(
-                    stats.get("total"),
-                    stats.get("active"),
-                    stats.get("pending"),
-                    stats.get("blocked"),
-                    stats.get("newToday"),
-                    LocalDateTime.now());
+            List<Client> clients = userService.searchClients(searchTerm, page, size);
+            List<ClientProfileResponse> response = clients.stream()
+                    .map(this::mapToProfileResponse)
+                    .toList();
 
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
-            log.error("Erreur récupération statistiques: {}", e.getMessage(), e);
+            log.error("Client search error: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 
+    /**
+     * Get client statistics (Admin only)
+     */
+    @GetMapping("/statistics")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Get client statistics", description = "Get overall client statistics")
+    @SecurityRequirement(name = "bearerAuth")
+    public ResponseEntity<ClientStatisticsResponse> getStatistics() {
+        try {
+            ClientStatisticsResponse stats = userService.getClientStatistics();
+            return ResponseEntity.ok(stats);
+
+        } catch (Exception e) {
+            log.error("Statistics error: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    /**
+     * Unlock user account (Admin only)
+     */
+    @PostMapping("/{clientId}/unlock")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Unlock user account", description = "Unlock a locked user account")
+    @SecurityRequirement(name = "bearerAuth")
+    public ResponseEntity<?> unlockAccount(@PathVariable String clientId) {
+        try {
+            Map<String, Object> response = authenticationService.unlockAccount(clientId);
+            return ResponseEntity.ok(response);
+
+        } catch (BusinessValidationException e) {
+            return ResponseEntity.badRequest()
+                .body(ErrorResponse.builder()
+                    .error("UNLOCK_FAILED")
+                    .message(e.getMessage())
+                    .timestamp(LocalDateTime.now())
+                    .build());
+        }
+    }
+
     // =====================================
-    // MÉTHODES UTILITAIRES
+    // 🛠️ UTILITY METHODS
     // =====================================
 
+    /**
+     * Extract client ID from authentication context
+     */
     private String extractClientId(Authentication authentication) {
-        if (authentication.getPrincipal() instanceof UserDetails) {
-            UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-            return userDetails.getUsername(); // Supposé contenir l'ID client
+        if (authentication != null && authentication.getPrincipal() instanceof String) {
+            return (String) authentication.getPrincipal();
         }
-        throw new SecurityException("Client non authentifié");
+        throw new BusinessValidationException("Invalid authentication context");
     }
 
-    private String getClientIpAddress(HttpServletRequest request) {
-        String xForwardedFor = request.getHeader("X-Forwarded-For");
-        if (xForwardedFor != null && !xForwardedFor.isEmpty()) {
-            return xForwardedFor.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
+    /**
+     * Map Client entity to Profile Response DTO
+     */
+    private ClientProfileResponse mapToProfileResponse(Client client) {
+        return ClientProfileResponse.builder()
+                .idClient(client.getIdClient())
+                .nom(client.getNom())
+                .prenom(client.getPrenom())
+                .email(client.getEmail())
+                .numero(client.getNumero())
+                .status(client.getStatus().toString())
+                .createdAt(client.getCreatedAt())
+                .lastLogin(client.getLastLogin())
+                .isKycVerified(client.getStatus() == ClientStatus.ACTIVE)
+                .build();
     }
 
+    /**
+     * Get status message for client status
+     */
     private String getStatusMessage(ClientStatus status) {
         return switch (status) {
-            case PENDING -> "Votre demande est en cours de traitement";
-            case ACTIVE -> "Votre compte est actif";
-            case SUSPENDED -> "Votre compte est temporairement suspendu";
-            case BLOCKED -> "Votre compte est bloqué";
-            case REJECTED -> "Votre demande a été rejetée";
+            case PENDING -> "Your registration is being processed";
+            case ACTIVE -> "Your account is active";
+            case REJECTED -> "Your registration was rejected";
+            case BLOCKED -> "Your account is blocked";
+            case SUSPENDED -> "Your account is temporarily suspended";
         };
     }
 
-    private ClientProfileResponse mapToProfileResponse(Client client) {
-        return new ClientProfileResponse(
-                client.getIdClient(),
-                client.getNom(),
-                client.getPrenom(),
-                client.getEmail(),
-                client.getNumero(),
-                client.getStatus(),
-                client.getCreatedAt(),
-                client.getLastLogin());
-    }
-
-    // =====================================
-    // GESTION D'ERREURS GLOBALE
-    // =====================================
-
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ValidationErrorResponse> handleValidationErrors(
-            MethodArgumentNotValidException ex) {
-
+    /**
+     * Create validation error response
+     */
+    private ValidationErrorResponse createValidationErrorResponse(BindingResult result) {
         Map<String, String> errors = new HashMap<>();
-        ex.getBindingResult().getFieldErrors()
-                .forEach(error -> errors.put(error.getField(), error.getDefaultMessage()));
+        result.getFieldErrors().forEach(error -> 
+            errors.put(error.getField(), error.getDefaultMessage()));
 
-        ValidationErrorResponse response = new ValidationErrorResponse(
-                "VALIDATION_ERROR",
-                "Données invalides",
-                errors,
-                LocalDateTime.now());
-
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
-    }
-
-    @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException ex) {
-        ErrorResponse response = new ErrorResponse(
-                "ACCESS_DENIED",
-                "Accès non autorisé",
-                LocalDateTime.now());
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(response);
-    }
-
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleGenericError(Exception ex) {
-        log.error("Erreur non gérée: {}", ex.getMessage(), ex);
-
-        ErrorResponse response = new ErrorResponse(
-                "INTERNAL_ERROR",
-                "Erreur technique interne",
-                LocalDateTime.now());
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        return ValidationErrorResponse.builder()
+                .message("Validation failed")
+                .errors(errors)
+                .timestamp(LocalDateTime.now())
+                .build();
     }
 }

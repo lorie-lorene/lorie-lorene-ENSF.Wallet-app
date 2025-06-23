@@ -12,187 +12,311 @@ import org.springframework.data.rest.core.annotation.RepositoryRestResource;
 import com.m1_fonda.serviceUser.model.Client;
 import com.m1_fonda.serviceUser.pojo.ClientStatus;
 
+/**
+ * 🗄️ User Repository - Enhanced with Additional Methods
+ * MongoDB repository for Client entity with comprehensive query methods
+ */
 @RepositoryRestResource
 public interface UserRepository extends MongoRepository<Client, String> {
 
+    // =====================================
+    // BASIC SEARCH METHODS
+    // =====================================
+
     /**
-     * Recherche par email (case insensitive)
+     * Find by email (case insensitive)
      */
     @Query("{'email': {$regex: ?0, $options: 'i'}}")
     Optional<Client> findByEmail(String email);
     
     /**
-     * Recherche par CNI
+     * Find by CNI
      */
     @Query("{'cni': ?0}")
     Optional<Client> findByCni(String cni);
     
     /**
-     * Recherche par numéro de téléphone
+     * Find by phone number
      */
     @Query("{'numero': ?0}")
     Optional<Client> findByNumero(String numero);
     
     /**
-     * Recherche client actif par numéro (pour authentification)
+     * Find active client by phone number (for authentication)
      */
     @Query("{'numero': ?0, 'status': 'ACTIVE'}")
     Optional<Client> findActiveClientByNumero(String numero);
     
     /**
-     * Recherche client actif par email (pour authentification)
+     * Find active client by email (for authentication)
      */
     @Query("{'email': {$regex: ?0, $options: 'i'}, 'status': 'ACTIVE'}")
     Optional<Client> findActiveClientByEmail(String email);
-    
+
     // =====================================
-    // REQUÊTES MÉTIER
+    // EXISTENCE CHECK METHODS
+    // =====================================
+
+    /**
+     * Check if email exists
+     */
+    @Query(value = "{'email': {$regex: ?0, $options: 'i'}}", exists = true)
+    boolean existsByEmail(String email);
+    
+    /**
+     * Check if CNI exists
+     */
+    @Query(value = "{'cni': ?0}", exists = true)
+    boolean existsByCni(String cni);
+    
+    /**
+     * Check if phone number exists
+     */
+    @Query(value = "{'numero': ?0}", exists = true)
+    boolean existsByNumero(String numero);
+
+    // =====================================
+    // STATUS-BASED QUERIES
     // =====================================
     
     /**
-     * Clients par statut
+     * Find clients by status
      */
     @Query("{'status': ?0}")
     List<Client> findByStatus(ClientStatus status);
     
     /**
-     * Clients par agence
+     * Find clients by multiple statuses
+     */
+    @Query("{'status': {$in: ?0}}")
+    List<Client> findByStatusIn(List<ClientStatus> statuses);
+    
+    /**
+     * Find clients by agency
      */
     @Query("{'idAgence': ?0}")
     List<Client> findByAgence(String idAgence);
     
     /**
-     * Clients avec tentatives de connexion échouées
+     * Find clients by agency and status
+     */
+    @Query("{'idAgence': ?0, 'status': ?1}")
+    List<Client> findByAgenceAndStatus(String idAgence, ClientStatus status);
+
+    // =====================================
+    // SECURITY AND LOGIN TRACKING
+    // =====================================
+    
+    /**
+     * Find clients with failed login attempts >= threshold
      */
     @Query("{'loginAttempts': {$gte: ?0}}")
     List<Client> findClientsWithFailedAttempts(int minAttempts);
     
     /**
-     * Clients créés dans une période
+     * Find clients locked due to failed attempts
      */
-    @Query("{'createdAt': {$gte: ?0, $lte: ?1}}")
-    List<Client> findByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
+    @Query("{'loginAttempts': {$gte: ?0}, 'lastFailedLogin': {$gte: ?1}}")
+    List<Client> findLockedClients(int maxAttempts, LocalDateTime lockoutThreshold);
     
     /**
-     * Clients inactifs (pas de connexion depuis X jours)
+     * Find clients who haven't logged in since a date
      */
-    @Query("{'lastLogin': {$lt: ?0}, 'status': 'ACTIVE'}")
-    List<Client> findInactiveClients(LocalDateTime cutoffDate);
-
-     
+    @Query("{'lastLogin': {$lt: ?0}}")
+    List<Client> findInactiveClientsSince(LocalDateTime date);
+    
     /**
-     * Compter clients par statut
+     * Find clients who logged in today
+     */
+    @Query("{'lastLogin': {$gte: ?0}}")
+    List<Client> findClientsLoggedInSince(LocalDateTime date);
+
+    // =====================================
+    // DATE-BASED QUERIES
+    // =====================================
+    
+    /**
+     * Find clients created between dates
+     */
+    @Query("{'createdAt': {$gte: ?0, $lte: ?1}}")
+    List<Client> findClientsCreatedBetween(LocalDateTime startDate, LocalDateTime endDate);
+    
+    /**
+     * Find clients created today
+     */
+    @Query("{'createdAt': {$gte: ?0}}")
+    List<Client> findClientsCreatedSince(LocalDateTime date);
+    
+    /**
+     * Find clients by creation date and status
+     */
+    @Query("{'createdAt': {$gte: ?0}, 'status': ?1}")
+    List<Client> findClientsCreatedSinceWithStatus(LocalDateTime date, ClientStatus status);
+
+    // =====================================
+    // SEARCH AND FILTERING
+    // =====================================
+    
+    /**
+     * Search clients by name (case insensitive)
+     */
+    @Query("{'$or': [" +
+           "{'nom': {$regex: ?0, $options: 'i'}}, " +
+           "{'prenom': {$regex: ?0, $options: 'i'}}" +
+           "]}")
+    List<Client> findByNameContaining(String searchTerm);
+    
+    /**
+     * Search clients by multiple criteria
+     */
+    @Query("{'$or': [" +
+           "{'nom': {$regex: ?0, $options: 'i'}}, " +
+           "{'prenom': {$regex: ?0, $options: 'i'}}, " +
+           "{'email': {$regex: ?0, $options: 'i'}}, " +
+           "{'numero': {$regex: ?0, $options: 'i'}}" +
+           "]}")
+    List<Client> searchClients(String searchTerm);
+    
+    /**
+     * Find clients with incomplete profiles
+     */
+    @Query("{'$or': [" +
+           "{'rectoCni': {$exists: false}}, " +
+           "{'versoCni': {$exists: false}}, " +
+           "{'rectoCni': null}, " +
+           "{'versoCni': null}" +
+           "]}")
+    List<Client> findClientsWithIncompleteDocuments();
+
+    // =====================================
+    // AGGREGATION AND STATISTICS
+    // =====================================
+    
+    /**
+     * Count clients by status
      */
     @Query(value = "{'status': ?0}", count = true)
     long countByStatus(ClientStatus status);
     
     /**
-     * Compter nouveaux clients du jour
+     * Count clients by agency
+     */
+    @Query(value = "{'idAgence': ?0}", count = true)
+    long countByAgence(String idAgence);
+    
+    /**
+     * Count clients created since date
      */
     @Query(value = "{'createdAt': {$gte: ?0}}", count = true)
-    long countNewClientsToday(LocalDateTime startOfDay);
+    long countClientsCreatedSince(LocalDateTime date);
     
     /**
-     * Clients bloqués ou suspendus
+     * Count active clients who logged in since date
      */
-    @Query("{'status': {$in: ['BLOCKED', 'SUSPENDED']}}")
-    List<Client> findBlockedOrSuspendedClients();
-    
+    @Query(value = "{'status': 'ACTIVE', 'lastLogin': {$gte: ?0}}", count = true)
+    long countActiveClientsLoggedInSince(LocalDateTime date);
+
     // =====================================
-    // MISES À JOUR SÉCURISÉES
+    // UPDATE OPERATIONS
     // =====================================
     
     /**
-     * Mise à jour dernière connexion
+     * Update last login time
      */
-   // @Modifying
     @Query("{'_id': ?0}")
-    @Update("{'$set': {'lastLogin': ?1, 'loginAttempts': 0}}")
-    void updateLastLogin(String clientId, LocalDateTime loginTime);
+    @Update("{'$set': {'lastLogin': ?1, 'loginAttempts': 0, 'lastFailedLogin': null}}")
+    void updateLastLogin(String clientId, LocalDateTime lastLogin);
     
     /**
-     * Incrémenter tentatives de connexion échouées
+     * Increment login attempts
      */
-   // @Modifying
     @Query("{'_id': ?0}")
     @Update("{'$inc': {'loginAttempts': 1}, '$set': {'lastFailedLogin': ?1}}")
-    void incrementFailedLoginAttempts(String clientId, LocalDateTime failedTime);
+    void incrementLoginAttempts(String clientId, LocalDateTime lastFailedLogin);
     
     /**
-     * Réinitialiser tentatives de connexion
+     * Reset login attempts
      */
-   // @Modifying
     @Query("{'_id': ?0}")
     @Update("{'$set': {'loginAttempts': 0, 'lastFailedLogin': null}}")
     void resetLoginAttempts(String clientId);
     
     /**
-     * Mettre à jour le statut
+     * Update client status
      */
-    //@Modifying
     @Query("{'_id': ?0}")
-    @Update("{'$set': {'status': ?1, 'updatedAt': ?2}}")
-    void updateStatus(String clientId, ClientStatus status, LocalDateTime updatedAt);
+    @Update("{'$set': {'status': ?1}}")
+    void updateClientStatus(String clientId, ClientStatus status);
     
     /**
-     * Mettre à jour mot de passe
+     * Update password
      */
-    //@Modifying
     @Query("{'_id': ?0}")
-    @Update("{'$set': {'passwordHash': ?1, 'salt': ?2, 'passwordChangedAt': ?3, 'loginAttempts': 0}}")
-    void updatePassword(String clientId, String passwordHash, String salt, LocalDateTime changedAt);
-    
+    @Update("{'$set': {'passwordHash': ?1, 'passwordChangedAt': ?2}}")
+    void updatePassword(String clientId, String passwordHash, LocalDateTime passwordChangedAt);
+
     // =====================================
-    // REQUÊTES DE SÉCURITÉ ET AUDIT
+    // BULK OPERATIONS
     // =====================================
     
     /**
-     * Clients avec activité suspecte (trop de tentatives)
+     * Find clients for bulk status update
      */
-    @Query("{'loginAttempts': {$gte: 3}, 'lastFailedLogin': {$gte: ?0}}")
-    List<Client> findSuspiciousActivity(LocalDateTime since);
+    @Query("{'status': ?0, 'createdAt': {$lt: ?1}}")
+    List<Client> findClientsForBulkStatusUpdate(ClientStatus currentStatus, LocalDateTime beforeDate);
     
     /**
-     * Clients nécessitant changement de mot de passe
+     * Find clients for cleanup (inactive for long time)
      */
-    @Query("{'passwordChangedAt': {$lt: ?0}, 'status': 'ACTIVE'}")
-    List<Client> findClientsNeedingPasswordChange(LocalDateTime cutoffDate);
+    @Query("{'status': {$in: ['REJECTED', 'BLOCKED']}, 'createdAt': {$lt: ?0}}")
+    List<Client> findClientsForCleanup(LocalDateTime beforeDate);
+
+    // =====================================
+    // COMPLEX QUERIES
+    // =====================================
     
     /**
-     * Recherche par critères multiples (pour admin)
-     * @param page 
+     * Find clients needing KYC reminder
      */
-    @Query("{'': [" +
-           "{'': [{'nom': {: ?0, : 'i'}}, {'prenom': {: ?0, : 'i'}}, {'email': {: ?0, : 'i'}}]}," +
-           "{'status': {: ?1}}" +
+    @Query("{'status': 'PENDING', 'createdAt': {$lt: ?0, $gte: ?1}}")
+    List<Client> findClientsNeedingKycReminder(LocalDateTime reminderDate, LocalDateTime cutoffDate);
+    
+    /**
+     * Find suspicious clients (multiple failed attempts recently)
+     */
+    @Query("{'loginAttempts': {$gte: ?0}, 'lastFailedLogin': {$gte: ?1}}")
+    List<Client> findSuspiciousClients(int minFailedAttempts, LocalDateTime recentDate);
+    
+    /**
+     * Find clients eligible for reactivation
+     */
+    @Query("{'status': 'SUSPENDED', '$or': [" +
+           "{'lastFailedLogin': {$lt: ?0}}, " +
+           "{'lastFailedLogin': null}" +
            "]}")
-    List<Client> searchClients(String searchTerm, List<ClientStatus> statuses, int page);
-    
+    List<Client> findClientsEligibleForReactivation(LocalDateTime reactivationDate);
+
     // =====================================
-    // VÉRIFICATIONS D'EXISTENCE
+    // REPORTING QUERIES
     // =====================================
     
     /**
-     * Vérifier si email existe
+     * Get client registration stats by date range
      */
-    boolean existsByEmail(String email);
+    @Query(value = "{'createdAt': {$gte: ?0, $lte: ?1}}", 
+           fields = "{'createdAt': 1, 'status': 1, 'idAgence': 1}")
+    List<Client> getRegistrationStatsByDateRange(LocalDateTime startDate, LocalDateTime endDate);
     
     /**
-     * Vérifier si CNI existe
+     * Get login activity stats
      */
-    boolean existsByCni(String cni);
+    @Query(value = "{'lastLogin': {$gte: ?0}}", 
+           fields = "{'lastLogin': 1, 'status': 1, 'idAgence': 1}")
+    List<Client> getLoginActivitySince(LocalDateTime date);
     
     /**
-     * Vérifier si numéro existe
+     * Find duplicate potential clients (same CNI or phone)
      */
-    boolean existsByNumero(String numero);
-    
-    /**
-     * Vérifier si client actif existe
-     */
-    @Query(value = "{'numero': ?0, 'status': 'ACTIVE'}", exists = true)
-    boolean existsActiveClientByNumero(String numero);
+    @Query("{'$or': [{'cni': ?0}, {'numero': ?1}], '_id': {$ne: ?2}}")
+    List<Client> findPotentialDuplicates(String cni, String numero, String excludeClientId);
 }
-
-    
-
