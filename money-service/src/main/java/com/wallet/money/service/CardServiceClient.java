@@ -14,7 +14,7 @@ import com.wallet.money.carteclient.CallbackPayload;
 @Slf4j
 public class CardServiceClient {
 
-    @Value("${card.service.url:http://localhost:8095}")
+    @Value("${card.service.url:http://localhost:8096}")
     private String cardServiceUrl;
 
     @Value("${card.service.auth.username:client}")

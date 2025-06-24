@@ -63,7 +63,7 @@ public class CardRechargeController {
                     request.getMontant().doubleValue(),
                     transaction.getExternalId(),
                     "Recharge carte " + request.getIdCarte(),
-                    "http://localhost:8096/webhook/freemopay");
+                    "http://localhost:8095/webhook/freemopay");
 
             PaymentResponse freemoResponse = depotMoneyService.createPayment2(paymentRequest);
             transactionService.updateFreemoReference(transaction.getId(), freemoResponse.getReference());
