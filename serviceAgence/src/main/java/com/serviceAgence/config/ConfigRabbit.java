@@ -2,6 +2,7 @@ package com.serviceAgence.config;
 
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.amqp.core.*;
@@ -13,9 +14,7 @@ public class ConfigRabbit {
     public static final String KEY = "agence.registration.response";
     public static final String KEY2 = "agence.password.reset.response";
     public static final String KEY3 = "agence.transaction.response";
-
     public static final String KEY4 = "welcome.client";
-
     public static final String KEY5 = "agence.transaction.card.response";
 
     @Bean
@@ -30,30 +29,33 @@ public class ConfigRabbit {
         return new TopicExchange(EXCHANGE);
     }
 
-    // Bindings - utilisation des beans de queues
+    // ==========================================
+    // FIXED BINDINGS WITH @Qualifier
+    // ==========================================
+
     @Bean
-    public Binding binding1(Queue queue1, TopicExchange topicExchange) {
-        return BindingBuilder.bind(queue1).to(topicExchange).with(KEY);
+    public Binding binding1(@Qualifier("queue_1") Queue queue, TopicExchange topicExchange) {
+        return BindingBuilder.bind(queue).to(topicExchange).with(KEY);
     }
 
     @Bean
-    public Binding binding2(Queue queue2, TopicExchange topicExchange) {
-        return BindingBuilder.bind(queue2).to(topicExchange).with(KEY2);
+    public Binding binding2(@Qualifier("queue_2") Queue queue, TopicExchange topicExchange) {
+        return BindingBuilder.bind(queue).to(topicExchange).with(KEY2);
     }
 
     @Bean
-    public Binding binding3(Queue queue3, TopicExchange topicExchange) {
-        return BindingBuilder.bind(queue3).to(topicExchange).with(KEY3);
+    public Binding binding3(@Qualifier("queue_3") Queue queue, TopicExchange topicExchange) {
+        return BindingBuilder.bind(queue).to(topicExchange).with(KEY3);
     }
 
     @Bean
-    public Binding binding4(Queue queue4, TopicExchange topicExchange) {
-        return BindingBuilder.bind(queue4).to(topicExchange).with(KEY4);
+    public Binding binding4(@Qualifier("queue_4") Queue queue, TopicExchange topicExchange) {
+        return BindingBuilder.bind(queue).to(topicExchange).with(KEY4);
     }
 
     @Bean
-    public Binding binding5(Queue queue6, TopicExchange topicExchange) {
-        return BindingBuilder.bind(queue6).to(topicExchange).with(KEY5);
+    public Binding binding5(@Qualifier("queue_5") Queue queue, TopicExchange topicExchange) {
+        return BindingBuilder.bind(queue).to(topicExchange).with(KEY5);
     }
 
     @Bean
@@ -70,19 +72,4 @@ public class ConfigRabbit {
     public static Binding createBinding(Queue queue, TopicExchange exchange, String routingKey) {
         return BindingBuilder.bind(queue).to(exchange).with(routingKey);
     }
-
-    /*
-     * UTILISATION:
-     * 
-     * Pour envoyer un message:
-     * rabbitTemplate.convertAndSend(EXCHANGE, KEY, message);
-     * 
-     * Pour écouter:
-     * 
-     * @RabbitListener(queues = QUEUE_1)
-     * public void handleMessage(Message message) { ... }
-     * 
-     * Les queues seront créées automatiquement au démarrage de l'application
-     * grâce aux beans @Bean déclarés ci-dessus.
-     */
 }

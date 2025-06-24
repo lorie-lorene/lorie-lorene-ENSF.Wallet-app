@@ -109,4 +109,53 @@ public class Client {
         this.selfieValidated = true;
         this.selfieUploadedAt = LocalDateTime.now();
     }
+
+    /**
+     * Setter pour le mot de passe hashé
+     */
+    public void setPassword(String hashedPassword) {
+        this.passwordHash = hashedPassword;
+    }
+
+    /**
+     * Getter pour le mot de passe (pour authentification)
+     */
+    public String getPassword() {
+        return this.passwordHash;
+    }
+
+    /**
+     * Vérifier si le client a un mot de passe
+     */
+    public boolean hasPassword() {
+        return passwordHash != null && !passwordHash.trim().isEmpty();
+    }
+
+    /**
+     * Setter pour l'image selfie
+     */
+    public void setSelfieImage(String selfieImage) {
+        this.selfieImage = selfieImage;
+    }
+
+    /**
+     * Getter pour l'image selfie
+     */
+    public String getSelfieImage() {
+        return this.selfieImage;
+    }
+
+    /**
+     * Setter pour la taille du fichier selfie
+     */
+    public void setSelfieFileSize(Long selfieFileSize) {
+        this.selfieFileSize = selfieFileSize;
+    }
+
+    /**
+     * Setter pour la date d'upload du selfie
+     */
+    public void setSelfieUploadedAt(LocalDateTime selfieUploadedAt) {
+        this.selfieUploadedAt = selfieUploadedAt;
+    }
 }

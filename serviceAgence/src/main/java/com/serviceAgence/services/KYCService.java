@@ -4,7 +4,7 @@ package com.serviceAgence.services;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Pattern;
+//import java.util.regex.Pattern;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -26,7 +26,7 @@ public class KYCService {
     @Autowired
     private DocumentKYCRepository documentRepository;
 
-    private static final Pattern CNI_PATTERN = Pattern.compile("\\d{8,12}");
+    //private static final Pattern CNI_PATTERN = Pattern.compile("\\d{8,12}");
     private static final int MIN_QUALITY_SCORE = 70;
 
     /**
@@ -107,8 +107,7 @@ public class KYCService {
         }
         
         String cleanCni = cni.trim().replaceAll("\\s+", "");
-        return CNI_PATTERN.matcher(cleanCni).matches() && 
-               cleanCni.length() >= 8 && cleanCni.length() <= 12;
+        return cleanCni.matches("\\d{8,12}"); // 8-12 chiffres
     }
 
     /**
@@ -239,5 +238,136 @@ public class KYCService {
         }
         
         return report.toString();
+    }
+
+    /**
+     * Validation de base des documents (format, taille, etc.) sans analyse complète
+     */
+    public KYCValidationResult validateDocumentsBasic(String idClient, String cni, 
+                                                    byte[] rectoCni, byte[] versoCni) {
+        log.info("🔍 Validation de base KYC pour client: {}", idClient);
+        
+        try {
+            KYCValidationResult result = new KYCValidationResult();
+            result.setValid(true);
+            result.setAnomalies(new ArrayList<>());
+            result.setDocumentsValidated(new ArrayList<>());
+            
+            // 1. Validation du format CNI
+            if (!isValidCameroonianCNI(cni)) {
+                result.setValid(false);
+                result.setErrorCode("FORMAT_CNI_INCORRECT");
+                result.setReason("Format de CNI camerounaise invalide");
+                result.setQualityScore(0);
+                return result;
+            }
+            
+            // 2. Validation des images
+            int qualityScore = validateImagesBasic(rectoCni, versoCni, result);
+            result.setQualityScore(qualityScore);
+            
+            // 3. Vérification qualité minimale
+            if (qualityScore < 30) {
+                result.setValid(false);
+                result.setErrorCode("QUALITE_INSUFFISANTE");
+                result.setReason("Qualité des images insuffisante pour traitement");
+                return result;
+            }
+            
+            // 4. Si tout est OK
+            if (result.isValid()) {
+                result.setErrorCode("VALIDATION_BASIQUE_OK");
+                result.setReason("Validation de base réussie");
+                result.getDocumentsValidated().add("CNI_RECTO");
+                result.getDocumentsValidated().add("CNI_VERSO");
+            }
+            
+            log.info("✅ Validation de base terminée - Score: {}, Anomalies: {}", 
+                    qualityScore, result.getAnomalies().size());
+            
+            return result;
+            
+        } catch (Exception e) {
+            log.error("❌ Erreur validation de base KYC: {}", e.getMessage(), e);
+            return KYCValidationResult.rejected("ERREUR_TECHNIQUE", 
+                "Erreur technique lors de la validation de base");
+        }
+    }
+
+    /**
+     * Validation de base des images (taille, format)
+     */
+    private int validateImagesBasic(byte[] rectoImage, byte[] versoImage, KYCValidationResult result) {
+        int score = 100;
+        
+        try {
+            // Validation image recto
+            if (rectoImage == null || rectoImage.length == 0) {
+                result.addAnomaly("IMAGE_RECTO_MANQUANTE");
+                score -= 50;
+            } else {
+                // Vérification taille minimale (50KB)
+                if (rectoImage.length < 50000) {
+                    result.addAnomaly("IMAGE_RECTO_TROP_PETITE");
+                    score -= 25;
+                }
+                // Vérification taille maximale (10MB)
+                if (rectoImage.length > 10 * 1024 * 1024) {
+                    result.addAnomaly("IMAGE_RECTO_TROP_VOLUMINEUSE");
+                    score -= 15;
+                }
+                // Vérification format basique
+                if (!isValidImageFormat(rectoImage)) {
+                    result.addAnomaly("FORMAT_RECTO_INVALIDE");
+                    score -= 30;
+                }
+            }
+            
+            // Validation image verso
+            if (versoImage == null || versoImage.length == 0) {
+                result.addAnomaly("IMAGE_VERSO_MANQUANTE");
+                score -= 50;
+            } else {
+                if (versoImage.length < 50000) {
+                    result.addAnomaly("IMAGE_VERSO_TROP_PETITE");
+                    score -= 25;
+                }
+                if (versoImage.length > 10 * 1024 * 1024) {
+                    result.addAnomaly("IMAGE_VERSO_TROP_VOLUMINEUSE");
+                    score -= 15;
+                }
+                if (!isValidImageFormat(versoImage)) {
+                    result.addAnomaly("FORMAT_VERSO_INVALIDE");
+                    score -= 30;
+                }
+            }
+            
+            return Math.max(0, score);
+            
+        } catch (Exception e) {
+            log.error("❌ Erreur validation images: {}", e.getMessage());
+            result.addAnomaly("ERREUR_VALIDATION_IMAGES");
+            return 0;
+        }
+    }
+
+    /**
+     * Validation format d'image basique
+     */
+    private boolean isValidImageFormat(byte[] imageData) {
+        if (imageData.length < 4) return false;
+        
+        // JPEG: FF D8 FF
+        if (imageData[0] == (byte) 0xFF && imageData[1] == (byte) 0xD8 && imageData[2] == (byte) 0xFF) {
+            return true;
+        }
+        
+        // PNG: 89 50 4E 47
+        if (imageData[0] == (byte) 0x89 && imageData[1] == 0x50 && 
+            imageData[2] == 0x4E && imageData[3] == 0x47) {
+            return true;
+        }
+        
+        return false;
     }
 }

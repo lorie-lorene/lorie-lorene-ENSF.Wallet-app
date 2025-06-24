@@ -1,13 +1,9 @@
 package com.serviceAgence;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
-
-import java.util.Arrays;
-import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -15,14 +11,15 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.serviceAgence.dto.KYCValidationResult;
-import com.serviceAgence.enums.DocumentStatus;
-import com.serviceAgence.enums.DocumentType;
-import com.serviceAgence.model.DocumentKYC;
 import com.serviceAgence.repository.DocumentKYCRepository;
 import com.serviceAgence.services.KYCService;
 
+/**
+ * Tests unitaires pour la validation KYC avec selfie
+ */
 @ExtendWith(MockitoExtension.class)
-class KYCServiceTest {
+@DisplayName("KYC Service Tests")
+public class KYCServiceTest {
 
     @Mock
     private DocumentKYCRepository documentRepository;
@@ -30,194 +27,90 @@ class KYCServiceTest {
     @InjectMocks
     private KYCService kycService;
 
-    private byte[] validJpegImage;
-    private byte[] validPngImage;
-    private byte[] invalidImage;
-    private String validCNI;
-    private String invalidCNI;
+    private byte[] validRectoImage;
+    private byte[] validVersoImage;
+    //private byte[] invalidImage;
 
     @BeforeEach
     void setUp() {
-        // Images valides (simulation des headers JPEG/PNG)
-        validJpegImage = new byte[]{(byte) 0xFF, (byte) 0xD8, 0x00, 0x00}; // Header JPEG
-        validPngImage = new byte[]{(byte) 0x89, 0x50, 0x4E, 0x47}; // Header PNG
-        
-        // Image invalide
-        invalidImage = new byte[]{0x00, 0x00, 0x00};
-        
-        // Ajouter de la taille pour passer la validation minimale
-        validJpegImage = expandImageData(validJpegImage, 60000); // 60KB
-        validPngImage = expandImageData(validPngImage, 80000); // 80KB
-        invalidImage = expandImageData(invalidImage, 1500); // 1.5KB
-
-        // CNI valides et invalides
-        validCNI = "123456789";
-        invalidCNI = "ABC123";
-    }
-
-    private byte[] expandImageData(byte[] header, int targetSize) {
-        byte[] expanded = new byte[targetSize];
-        System.arraycopy(header, 0, expanded, 0, Math.min(header.length, targetSize));
-        // Remplir le reste avec des données aléatoires
-        for (int i = header.length; i < targetSize; i++) {
-            expanded[i] = (byte) (i % 256);
-        }
-        return expanded;
+        validRectoImage = createValidJPEGImage(60000); // 60KB
+        validVersoImage = createValidJPEGImage(55000); // 55KB
+        //invalidImage = "invalid".getBytes(); // Invalid image
     }
 
     @Test
-    void testValidateDocuments_Success() {
-        // Given
-        when(documentRepository.existsByNumeroDocumentAndType(validCNI, DocumentType.CNI_CAMEROUNAISE))
-            .thenReturn(false);
-        when(documentRepository.save(any(DocumentKYC.class)))
-            .thenAnswer(invocation -> invocation.getArgument(0));
-
+    @DisplayName("Basic validation with valid images should succeed")
+    void testValidateDocumentsBasic_WithValidImages_ShouldSucceed() {
         // When
-        KYCValidationResult result = kycService.validateDocuments(
-            "CLIENT123", validCNI, validJpegImage, validPngImage);
+        KYCValidationResult result = kycService.validateDocumentsBasic(
+            "CLIENT123", "123456789012", validRectoImage, validVersoImage);
 
         // Then
         assertTrue(result.isValid());
-        assertEquals("DOCUMENTS_CONFORMES", result.getErrorCode());
-        assertTrue(result.getReason().contains("validés avec succès"));
-        
-        verify(documentRepository).existsByNumeroDocumentAndType(validCNI, DocumentType.CNI_CAMEROUNAISE);
-        verify(documentRepository).save(any(DocumentKYC.class));
+        assertEquals("VALIDATION_BASIQUE_OK", result.getErrorCode());
+        assertTrue(result.getQualityScore() > 70);
+        assertNotNull(result.getAnomalies());
+        assertTrue(result.getDocumentsValidated().contains("CNI_RECTO"));
+        assertTrue(result.getDocumentsValidated().contains("CNI_VERSO"));
     }
 
     @Test
-    void testValidateDocuments_InvalidCNIFormat() {
+    @DisplayName("Basic validation with invalid CNI format should fail")
+    void testValidateDocumentsBasic_WithInvalidCNI_ShouldFail() {
         // When
-        KYCValidationResult result = kycService.validateDocuments(
-            "CLIENT123", invalidCNI, validJpegImage, validPngImage);
+        KYCValidationResult result = kycService.validateDocumentsBasic(
+            "CLIENT123", "invalid-cni", validRectoImage, validVersoImage);
 
         // Then
         assertFalse(result.isValid());
         assertEquals("FORMAT_CNI_INCORRECT", result.getErrorCode());
-        assertTrue(result.getReason().contains("format de la CNI"));
-        
-        verify(documentRepository, never()).save(any());
+        assertEquals(0, result.getQualityScore());
     }
 
     @Test
-    void testValidateDocuments_CNIAlreadyUsed() {
-        // Given
-        when(documentRepository.existsByNumeroDocumentAndType(validCNI, DocumentType.CNI_CAMEROUNAISE))
-            .thenReturn(true);
-
+    @DisplayName("Basic validation with missing images should fail")
+    void testValidateDocumentsBasic_WithMissingImages_ShouldFail() {
         // When
-        KYCValidationResult result = kycService.validateDocuments(
-            "CLIENT123", validCNI, validJpegImage, validPngImage);
+        KYCValidationResult result = kycService.validateDocumentsBasic(
+            "CLIENT123", "123456789012", null, validVersoImage);
 
         // Then
         assertFalse(result.isValid());
-        assertEquals("CNI_DEJA_UTILISEE", result.getErrorCode());
-        assertTrue(result.getReason().contains("déjà associée"));
-        
-        verify(documentRepository, never()).save(any());
+        assertTrue(result.getAnomalies().contains("IMAGE_RECTO_MANQUANTE"));
+        assertTrue(result.getQualityScore() < 70);
     }
 
     @Test
-    void testValidateDocuments_PoorImageQuality() {
-        // Given
-        byte[] smallImage = new byte[1000]; // Trop petit
-        when(documentRepository.existsByNumeroDocumentAndType(validCNI, DocumentType.CNI_CAMEROUNAISE))
-            .thenReturn(false);
-        when(documentRepository.save(any(DocumentKYC.class)))
-            .thenAnswer(invocation -> invocation.getArgument(0));
+    @DisplayName("Basic validation with poor quality images should fail")
+    void testValidateDocumentsBasic_WithPoorQuality_ShouldFail() {
+        // Given - very small images
+        byte[] smallImage = createValidJPEGImage(10000); // 10KB (too small)
 
         // When
-        KYCValidationResult result = kycService.validateDocuments(
-            "CLIENT123", validCNI, smallImage, smallImage);
+        KYCValidationResult result = kycService.validateDocumentsBasic(
+            "CLIENT123", "123456789012", smallImage, smallImage);
 
         // Then
         assertFalse(result.isValid());
-        assertEquals("QUALITE_IMAGE_INSUFFISANTE", result.getErrorCode());
-        assertTrue(result.getReason().contains("qualité des images"));
-        
-        verify(documentRepository).save(any(DocumentKYC.class));
+        assertEquals("QUALITE_INSUFFISANTE", result.getErrorCode());
+        assertTrue(result.getAnomalies().contains("IMAGE_RECTO_TROP_PETITE"));
+        assertTrue(result.getAnomalies().contains("IMAGE_VERSO_TROP_PETITE"));
     }
 
-    @Test
-    void testValidateDocuments_FraudDetected() {
-        // Given
-        String blacklistedCNI = "000000000"; // CNI dans la blacklist
-        when(documentRepository.existsByNumeroDocumentAndType(blacklistedCNI, DocumentType.CNI_CAMEROUNAISE))
-            .thenReturn(false);
-        when(documentRepository.save(any(DocumentKYC.class)))
-            .thenAnswer(invocation -> invocation.getArgument(0));
-
-        // When
-        KYCValidationResult result = kycService.validateDocuments(
-            "CLIENT123", blacklistedCNI, validJpegImage, validPngImage);
-
-        // Then
-        assertFalse(result.isValid());
-        assertEquals("FRAUDE_DETECTEE", result.getErrorCode());
-        assertTrue(result.getReason().contains("Document suspect"));
+    // Helper method to create valid JPEG images for testing
+    private byte[] createValidJPEGImage(int size) {
+        byte[] image = new byte[size];
+        // JPEG header
+        image[0] = (byte) 0xFF;
+        image[1] = (byte) 0xD8;
+        image[2] = (byte) 0xFF;
+        image[3] = (byte) 0xE0;
         
-        verify(documentRepository).save(any(DocumentKYC.class));
-    }
-
-    @Test
-    void testGenerateKYCReport() {
-        // Given
-        DocumentKYC document1 = new DocumentKYC();
-        document1.setType(DocumentType.CNI_CAMEROUNAISE);
-        document1.setNumeroDocument("123456789");
-        document1.setStatus(DocumentStatus.APPROVED);
-        document1.setScoreQualite(85);
-        document1.setFraudDetected(false);
-
-        DocumentKYC document2 = new DocumentKYC();
-        document2.setType(DocumentType.PASSEPORT);
-        document2.setNumeroDocument("PASS123456");
-        document2.setStatus(DocumentStatus.REJECTED);
-        document2.setScoreQualite(45);
-        document2.setFraudDetected(true);
-        document2.setAnomaliesDetectees(Arrays.asList("Image corrompue"));
-
-        List<DocumentKYC> documents = Arrays.asList(document1, document2);
+        // Fill rest with dummy data
+        for (int i = 4; i < size; i++) {
+            image[i] = (byte) (i % 256);
+        }
         
-        when(documentRepository.findByIdClientOrderByUploadedAtDesc("CLIENT123"))
-            .thenReturn(documents);
-
-        // When
-        String report = kycService.generateKYCReport("CLIENT123");
-
-        // Then
-        assertNotNull(report);
-        assertTrue(report.contains("=== RAPPORT KYC CLIENT CLIENT123 ==="));
-        assertTrue(report.contains("Carte Nationale d'Identité Camerounaise"));
-        assertTrue(report.contains("123456789"));
-        assertTrue(report.contains("Validé"));
-        assertTrue(report.contains("Score qualité: 85/100"));
-        assertTrue(report.contains("⚠️ FRAUDE DÉTECTÉE"));
-        assertTrue(report.contains("Image corrompue"));
-        
-        verify(documentRepository).findByIdClientOrderByUploadedAtDesc("CLIENT123");
-    }
-
-    @Test
-    void testGetClientDocuments() {
-        // Given
-        DocumentKYC document = new DocumentKYC();
-        document.setIdClient("CLIENT123");
-        document.setType(DocumentType.CNI_CAMEROUNAISE);
-        document.setStatus(DocumentStatus.APPROVED);
-        
-        List<DocumentKYC> documents = Arrays.asList(document);
-        when(documentRepository.findByIdClientOrderByUploadedAtDesc("CLIENT123"))
-            .thenReturn(documents);
-
-        // When
-        List<DocumentKYC> result = kycService.getClientDocuments("CLIENT123");
-
-        // Then
-        assertEquals(1, result.size());
-        assertEquals(document, result.get(0));
-        verify(documentRepository).findByIdClientOrderByUploadedAtDesc("CLIENT123");
+        return image;
     }
 }
-

@@ -1,55 +1,51 @@
 package com.serviceAgence.dto;
 
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * DTO pour les demandes d'enregistrement utilisateur avec selfie
+ */
 @Data
-@AllArgsConstructor
+@Builder
 @NoArgsConstructor
+@AllArgsConstructor
 public class UserRegistrationRequest {
-    @NotBlank
     private String idClient;
-
-    @NotBlank
     private String idAgence;
-
-    @NotBlank
     private String cni;
-
-    @Email
     private String email;
-
-    @NotBlank
     private String nom;
-
-    @NotBlank
     private String prenom;
-
-    @NotBlank
     private String numero;
-
+    
+    // Documents KYC (données binaires décodées)
     private byte[] rectoCni;
     private byte[] versoCni;
-
-    /**
-     * Image selfie de l'utilisateur (décodée depuis Base64)
-     */
-    private byte[] selfieImage;
-
+    private byte[] selfieImage;  // Selfie utilisateur
+    
     /**
      * Vérifier si le selfie est présent
      */
     public boolean hasSelfie() {
         return selfieImage != null && selfieImage.length > 0;
     }
-
+    
     /**
      * Obtenir la taille du selfie en bytes
      */
     public long getSelfieSize() {
         return selfieImage != null ? selfieImage.length : 0;
+    }
+    
+    /**
+     * Vérifier si tous les documents requis sont présents
+     */
+    public boolean hasAllDocuments() {
+        return rectoCni != null && rectoCni.length > 0 &&
+               versoCni != null && versoCni.length > 0 &&
+               hasSelfie();
     }
 }

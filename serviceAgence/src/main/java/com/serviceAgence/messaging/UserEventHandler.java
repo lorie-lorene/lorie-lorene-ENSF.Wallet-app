@@ -39,6 +39,7 @@ public class UserEventHandler {
                 
                 RegistrationProcessingResult errorResult = RegistrationProcessingResult.rejected(
                     "SELFIE_REQUIRED", "Selfie utilisateur obligatoire pour la vérification d'identité");
+                    
                 eventPublisher.sendRegistrationResponse(event.getIdClient(), event.getIdAgence(),
                         event.getEmail(), errorResult);
                 return;
@@ -55,7 +56,7 @@ public class UserEventHandler {
                     event.getEmail(), result);
 
             log.info("✅ Demande avec selfie traitée: client={}, résultat={}",
-                    event.getIdClient(), result.getStatus());
+                    event.getIdClient(), result.getStatus()); // ← FIXED: Now getStatus() exists
 
         } catch (Exception e) {
             log.error("❌ Erreur traitement demande avec selfie: {}", e.getMessage(), e);
@@ -89,7 +90,7 @@ public class UserEventHandler {
                 request.setVersoCni(Base64.getDecoder().decode(event.getVersoCni()));
             }
             
-            // ← NEW: Décodage du selfie
+            // Décodage du selfie
             if (event.getSelfieImage() != null && !event.getSelfieImage().trim().isEmpty()) {
                 request.setSelfieImage(Base64.getDecoder().decode(event.getSelfieImage()));
                 log.info("📸 Selfie décodé pour client: {} - Taille: {} bytes", 
@@ -104,18 +105,13 @@ public class UserEventHandler {
         return request;
     }
 
-    /**
-     * Réception des demandes de reset password
-     */
+    // Réception des demandes de reset password (inchangé)
     @RabbitListener(queues = "Demande-Reset-passWord-Queue")
     public void handlePasswordResetRequest(PasswordResetRequestEvent event) {
         log.info("Réception demande reset password: client={}", event.getIdClient());
 
         try {
-            // TODO: Implémenter logique de reset password
-            // Pour l'instant, génération d'un mot de passe temporaire
             String tempPassword = generateTemporaryPassword();
-
             eventPublisher.sendPasswordResetResponse(event.getCni(), tempPassword,
                     event.getEmail(), "AGENCE_SYSTEM");
 
@@ -126,40 +122,7 @@ public class UserEventHandler {
         }
     }
 
-    /**
-     * Conversion événement vers DTO
-     */
-    private UserRegistrationRequest convertToRegistrationRequest(UserRegistrationEventReceived event) {
-        UserRegistrationRequest request = new UserRegistrationRequest();
-        request.setIdClient(event.getIdClient());
-        request.setIdAgence(event.getIdAgence());
-        request.setCni(event.getCni());
-        request.setEmail(event.getEmail());
-        request.setNom(event.getNom());
-        request.setPrenom(event.getPrenom());
-        request.setNumero(event.getNumero());
-
-        // Décodage des images Base64
-        try {
-            if (event.getRectoCni() != null && !event.getRectoCni().trim().isEmpty()) {
-                request.setRectoCni(Base64.getDecoder().decode(event.getRectoCni()));
-            }
-            if (event.getVersoCni() != null && !event.getVersoCni().trim().isEmpty()) {
-                request.setVersoCni(Base64.getDecoder().decode(event.getVersoCni()));
-            }
-        } catch (IllegalArgumentException e) {
-            log.warn("Erreur décodage Base64 pour client {}: {}", event.getIdClient(), e.getMessage());
-            // Les images seront null, la validation KYC pourra les détecter
-        }
-
-        return request;
-    }
-
-    /**
-     * Génération mot de passe temporaire sécurisé
-     */
     private String generateTemporaryPassword() {
-        // Génération plus sécurisée
         String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         StringBuilder password = new StringBuilder();
 

@@ -11,8 +11,6 @@ public class QueueRabbit {
     public static final String QUEUE_Mt_passe = "Reset-PW-Queue";
     public static final String QUEUE_Statut_tranfert = "Statut-Transaction-Queue";
     public static final String QUEUE_Welcome = "Welcome-Queue";
-
-    // queue agence vers carte
     public static final String QUEUE_Carte = "Transaction-Card-Queue";
 
     @Bean
@@ -22,7 +20,7 @@ public class QueueRabbit {
 
     @Bean
     public Queue queue_2() {
-        return new Queue(QUEUE_Statut_compte);
+        return new Queue(QUEUE_Mt_passe);
     }
 
     @Bean
@@ -37,11 +35,10 @@ public class QueueRabbit {
 
     @Bean
     public Queue queue_5() {
-
         return new Queue(QUEUE_Carte);
     }
 
-    /* configuration des queues de reception en cas d'absence */
+    /* configuration des queues de reception */
 
     // reception d'une demande de creation de compte
     @Bean
@@ -55,16 +52,13 @@ public class QueueRabbit {
         return new Queue("Response-Queue");
     }
 
-    // reception d'une demande de depot
-
     // reception d'une demande de transaction
-
     @Bean
     public Queue queue_r_demande_transaction() {
         return new Queue("Demande-Transaction-Queue");
     }
-    // reception d'une demande de retrait
 
+    // reception d'une demande de retrait
     @Bean
     public Queue queue_r_demande_retrait() {
         return new Queue("Demande-Retrait-Queue");
@@ -74,7 +68,5 @@ public class QueueRabbit {
     @Bean
     public Queue queue_r_demande_rreset() {
         return new Queue("Demande-Reset-passWord-Queue");
-
     }
-
 }
