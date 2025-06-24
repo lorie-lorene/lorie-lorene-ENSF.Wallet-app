@@ -33,4 +33,23 @@ public class UserRegistrationRequest {
 
     private byte[] rectoCni;
     private byte[] versoCni;
+
+    /**
+     * Image selfie de l'utilisateur (décodée depuis Base64)
+     */
+    private byte[] selfieImage;
+
+    /**
+     * Vérifier si le selfie est présent
+     */
+    public boolean hasSelfie() {
+        return selfieImage != null && selfieImage.length > 0;
+    }
+
+    /**
+     * Obtenir la taille du selfie en bytes
+     */
+    public long getSelfieSize() {
+        return selfieImage != null ? selfieImage.length : 0;
+    }
 }

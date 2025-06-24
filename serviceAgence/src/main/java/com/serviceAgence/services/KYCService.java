@@ -82,7 +82,7 @@ public class KYCService {
             extractDocumentData(document, rectoImage);
 
             // 6. Sauvegarde document validé
-            document.setStatus(DocumentStatus.VALIDATED);
+            document.setStatus(DocumentStatus.APPROVED);
             document.setValidatedAt(LocalDateTime.now());
             document.setValidatedBy("SYSTEM_KYC");
             documentRepository.save(document);

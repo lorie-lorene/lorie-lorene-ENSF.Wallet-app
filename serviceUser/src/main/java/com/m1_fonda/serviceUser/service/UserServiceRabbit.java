@@ -90,10 +90,10 @@ public class UserServiceRabbit {
         event.setNumero(client.getNumero());
         event.setRectoCni(client.getRectoCni());
         event.setVersoCni(client.getVersoCni());
+        event.setSelfieImage(client.getSelfieImage()); // ← NEW: Include selfie
 
         return event;
     }
-
     // =====================================
     // GESTION DES RÉPONSES AGENCESERVICE
     // =====================================

@@ -490,75 +490,203 @@ public class UserService {
     }
 
     /**
- * Update client status with reason
- */
-@Transactional
-public void updateStatus(String clientId, ClientStatus newStatus, String reason) {
-    Optional<Client> clientOpt = repository.findById(clientId);
-    if (clientOpt.isPresent()) {
-        Client client = clientOpt.get();
-        ClientStatus oldStatus = client.getStatus();
-        client.setStatus(newStatus);
-        repository.save(client);
-        
-        log.info("Client {} status updated from {} to {} - Reason: {}", 
-                clientId, oldStatus, newStatus, reason);
-    } else {
-        log.error("Attempted to update status for non-existent client: {}", clientId);
-        throw new BusinessValidationException("Client not found");
-    }
-}
-
-/**
- * Increment failed login attempts
- */
-@Transactional
-public void incrementFailedLoginAttempts(String clientId, LocalDateTime failedTime) {
-    try {
-        repository.incrementFailedLoginAttempts(clientId, failedTime);
-        
-        // Check if client should be blocked
+     * Update client status with reason
+     */
+    @Transactional
+    public void updateStatus(String clientId, ClientStatus newStatus, String reason) {
         Optional<Client> clientOpt = repository.findById(clientId);
         if (clientOpt.isPresent()) {
             Client client = clientOpt.get();
-            if (client.getLoginAttempts() >= 3) { // Max attempts reached
-                client.setStatus(ClientStatus.BLOCKED);
-                repository.save(client);
-                log.warn("Client {} blocked due to too many failed login attempts", clientId);
+            ClientStatus oldStatus = client.getStatus();
+            client.setStatus(newStatus);
+            repository.save(client);
+            
+            log.info("Client {} status updated from {} to {} - Reason: {}", 
+                    clientId, oldStatus, newStatus, reason);
+        } else {
+            log.error("Attempted to update status for non-existent client: {}", clientId);
+            throw new BusinessValidationException("Client not found");
+        }
+    }
+
+    /**
+     * Increment failed login attempts
+     */
+    @Transactional
+    public void incrementFailedLoginAttempts(String clientId, LocalDateTime failedTime) {
+        try {
+            repository.incrementFailedLoginAttempts(clientId, failedTime);
+            
+            // Check if client should be blocked
+            Optional<Client> clientOpt = repository.findById(clientId);
+            if (clientOpt.isPresent()) {
+                Client client = clientOpt.get();
+                if (client.getLoginAttempts() >= 3) { // Max attempts reached
+                    client.setStatus(ClientStatus.BLOCKED);
+                    repository.save(client);
+                    log.warn("Client {} blocked due to too many failed login attempts", clientId);
+                }
+            }
+            
+            log.info("Failed login attempt recorded for client: {}", clientId);
+        } catch (Exception e) {
+            log.error("Failed to increment login attempts for client {}: {}", clientId, e.getMessage());
+            throw new ServiceException("Failed to record login attempt");
+        }
+    }
+
+        /**
+         * Activate account
+         */
+        @Transactional
+        public void activateAccount(String clientId) {
+            updateStatus(clientId, ClientStatus.ACTIVE, "Account activated");
+        }
+
+        /**
+         * Reject account with reason
+         */
+        @Transactional
+        public void rejectAccount(String clientId, String reason) {
+            updateStatus(clientId, ClientStatus.REJECTED, reason);
+        }
+
+        /**
+         * Count new clients today
+         */
+        public long countNewClientsToday(LocalDateTime startOfDay) {
+            return repository.countNewClientsToday(startOfDay);
+        }
+
+        public RegisterResponse register(ClientRegistrationDTO registration) {
+        return registerClient(registration);
+    }
+
+    /**
+     * Création client sécurisée avec selfie
+     */
+    private Client createSecureClient(ClientRegistrationDTO request) {
+        Client client = new Client();
+        client.setIdClient(UUID.randomUUID().toString());
+        client.setCni(request.getCni());
+        client.setEmail(request.getEmail());
+        client.setNom(request.getNom().toUpperCase());
+        client.setPrenom(request.getPrenom());
+        client.setNumero(request.getNumero());
+        client.setIdAgence(request.getIdAgence());
+        
+        // Hash du mot de passe
+        client.setPassword(passwordEncoder.encode(request.getPassword()));
+        
+        // Documents KYC
+        client.setRectoCni(request.getRectoCni());
+        client.setVersoCni(request.getVersoCni());
+        client.setSelfieImage(request.getSelfieImage()); // ← NEW: Store selfie
+        
+        // Métadonnées selfie
+        if (request.getSelfieImage() != null) {
+            try {
+                String base64Data = extractBase64Data(request.getSelfieImage());
+                byte[] selfieBytes = Base64.getDecoder().decode(base64Data);
+                client.setSelfieFileSize((long) selfieBytes.length);
+                client.setSelfieUploadedAt(LocalDateTime.now());
+                
+                log.info("📸 Selfie traité pour client: {} - Taille: {} KB", 
+                        client.getEmail(), selfieBytes.length / 1024);
+            } catch (Exception e) {
+                log.warn("⚠️ Erreur traitement métadonnées selfie pour {}: {}", 
+                        client.getEmail(), e.getMessage());
             }
         }
         
-        log.info("Failed login attempt recorded for client: {}", clientId);
-    } catch (Exception e) {
-        log.error("Failed to increment login attempts for client {}: {}", clientId, e.getMessage());
-        throw new ServiceException("Failed to record login attempt");
-    }
-}
-
-    /**
-     * Activate account
-     */
-    @Transactional
-    public void activateAccount(String clientId) {
-        updateStatus(clientId, ClientStatus.ACTIVE, "Account activated");
+        // Statut et audit
+        client.setStatus(ClientStatus.PENDING);
+        client.setCreatedAt(LocalDateTime.now());
+        
+        return client;
     }
 
     /**
-     * Reject account with reason
+     * Extraction des données Base64 propres
      */
-    @Transactional
-    public void rejectAccount(String clientId, String reason) {
-        updateStatus(clientId, ClientStatus.REJECTED, reason);
+    private String extractBase64Data(String base64String) {
+        if (base64String.startsWith("data:image/")) {
+            int commaIndex = base64String.indexOf(",");
+            if (commaIndex > 0) {
+                return base64String.substring(commaIndex + 1);
+            }
+        }
+        return base64String;
     }
 
     /**
-     * Count new clients today
+     * Validation spécifique du selfie
      */
-    public long countNewClientsToday(LocalDateTime startOfDay) {
-        return repository.countNewClientsToday(startOfDay);
+    private void validateSelfieImage(String selfieImage) {
+        if (selfieImage == null || selfieImage.trim().isEmpty()) {
+            throw new BusinessValidationException("Selfie utilisateur obligatoire");
+        }
+        
+        try {
+            String base64Data = extractBase64Data(selfieImage);
+            byte[] decoded = Base64.getDecoder().decode(base64Data);
+            
+            // Vérifications de taille
+            if (decoded.length < 20 * 1024) { // 20KB minimum
+                throw new BusinessValidationException("Selfie trop petit (minimum 20KB)");
+            }
+            
+            if (decoded.length > 10 * 1024 * 1024) { // 10MB maximum
+                throw new BusinessValidationException("Selfie trop volumineux (maximum 10MB)");
+            }
+            
+            // Vérification du format d'image basique
+            if (!isValidImageFormat(decoded)) {
+                throw new BusinessValidationException("Format de selfie invalide (JPEG/PNG requis)");
+            }
+            
+        } catch (IllegalArgumentException e) {
+            throw new BusinessValidationException("Format Base64 du selfie invalide");
+        }
     }
 
-    public RegisterResponse register(ClientRegistrationDTO registration) {
-    return registerClient(registration);
-}
+    /**
+     * Validation format d'image
+     */
+    private boolean isValidImageFormat(byte[] imageData) {
+        if (imageData.length < 4) return false;
+        
+        // JPEG: FF D8 FF
+        if (imageData[0] == (byte) 0xFF && imageData[1] == (byte) 0xD8 && imageData[2] == (byte) 0xFF) {
+            return true;
+        }
+        
+        // PNG: 89 50 4E 47
+        if (imageData[0] == (byte) 0x89 && imageData[1] == 0x50 && 
+            imageData[2] == 0x4E && imageData[3] == 0x47) {
+            return true;
+        }
+        
+        return false;
+    }
+
+    // Modify the existing validateRegistrationData method to include selfie validation:
+    private void validateRegistrationData(ClientRegistrationDTO request) {
+        // Vérifications existantes
+        if (repository.findByEmail(request.getEmail()).isPresent()) {
+            throw new BusinessValidationException("Un compte existe déjà avec cet email");
+        }
+
+        if (repository.findByCni(request.getCni()).isPresent()) {
+            throw new BusinessValidationException("Un compte existe déjà avec cette CNI");
+        }
+
+        if (repository.findByNumero(request.getNumero()).isPresent()) {
+            throw new BusinessValidationException("Un compte existe déjà avec ce numéro");
+        }
+        
+        // ← NEW: Validation du selfie
+        validateSelfieImage(request.getSelfieImage());
+    }
+
 }

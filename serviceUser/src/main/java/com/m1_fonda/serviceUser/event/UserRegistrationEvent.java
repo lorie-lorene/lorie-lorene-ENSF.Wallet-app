@@ -8,14 +8,14 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
 
+/**
+ * Event d'enregistrement utilisateur avec selfie
+ */
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
 @ToString
-
-/* class de configuration d'envoie pour une demande vers une agence */
-
-public class  UserRegistrationEvent{
+public class UserRegistrationEvent {
     private String eventId = UUID.randomUUID().toString();
     private LocalDateTime timestamp = LocalDateTime.now();
     
@@ -27,8 +27,11 @@ public class  UserRegistrationEvent{
     private String nom;
     private String prenom;
     private String numero;
-    private String rectoCni;
-    private String versoCni;
+    
+    // Documents KYC
+    private String rectoCni;     // Base64 encoded - CNI recto
+    private String versoCni;     // Base64 encoded - CNI verso
+    private String selfieImage;  // Base64 encoded - User selfie ← NEW
     
     private String sourceService = "UserService";
     private String targetService = "AgenceService";

@@ -77,4 +77,36 @@ public class Client {
             status = ClientStatus.PENDING;
         }
     }
+
+    /**
+     * Image selfie de l'utilisateur (Base64 encoded)
+     */
+    @Indexed
+    private String selfieImage;
+
+    /**
+     * Métadonnées du selfie
+     */
+    private Long selfieFileSize;
+    private LocalDateTime selfieUploadedAt;
+
+    /**
+     * Statut de validation du selfie
+     */
+    private Boolean selfieValidated = false;
+
+    /**
+     * Vérifier si le client a un selfie
+     */
+    public boolean hasSelfie() {
+        return selfieImage != null && !selfieImage.trim().isEmpty();
+    }
+
+    /**
+     * Marquer le selfie comme validé
+     */
+    public void validateSelfie() {
+        this.selfieValidated = true;
+        this.selfieUploadedAt = LocalDateTime.now();
+    }
 }

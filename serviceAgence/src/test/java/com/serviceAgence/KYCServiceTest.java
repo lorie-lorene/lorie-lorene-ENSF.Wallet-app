@@ -166,7 +166,7 @@ class KYCServiceTest {
         DocumentKYC document1 = new DocumentKYC();
         document1.setType(DocumentType.CNI_CAMEROUNAISE);
         document1.setNumeroDocument("123456789");
-        document1.setStatus(DocumentStatus.VALIDATED);
+        document1.setStatus(DocumentStatus.APPROVED);
         document1.setScoreQualite(85);
         document1.setFraudDetected(false);
 
@@ -205,7 +205,7 @@ class KYCServiceTest {
         DocumentKYC document = new DocumentKYC();
         document.setIdClient("CLIENT123");
         document.setType(DocumentType.CNI_CAMEROUNAISE);
-        document.setStatus(DocumentStatus.VALIDATED);
+        document.setStatus(DocumentStatus.APPROVED);
         
         List<DocumentKYC> documents = Arrays.asList(document);
         when(documentRepository.findByIdClientOrderByUploadedAtDesc("CLIENT123"))
