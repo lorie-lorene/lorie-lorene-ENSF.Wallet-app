@@ -1,0 +1,84 @@
+2025-06-24 15:12:30 [restartedMain] INFO  c.m.s.ServiceUserApplication - Starting ServiceUserApplication using Java 17.0.14 with PID 22900 (C:\Users\Swaggie\Documents\GitHub\lorie-lorene-ENSF.Wallet-app\serviceUser\target\classes started by Swaggie in C:\Users\Swaggie\Documents\GitHub\lorie-lorene-ENSF.Wallet-app\serviceUser)
+2025-06-24 15:12:30 [restartedMain] DEBUG c.m.s.ServiceUserApplication - Running with Spring Boot v3.3.4, Spring v6.1.13
+2025-06-24 15:12:30 [restartedMain] INFO  c.m.s.ServiceUserApplication - The following 1 profile is active: "dev"
+2025-06-24 15:12:31 [restartedMain] INFO  o.s.c.c.c.ConfigServerConfigDataLoader - Fetching config from server at : http://localhost:8080
+2025-06-24 15:12:31 [restartedMain] INFO  o.s.c.c.c.ConfigServerConfigDataLoader - Located environment: name=serviceUser, profiles=[default], label=null, version=79ab4ffa905d6e5f801781a94f3c6122cd1c5060, state=null
+2025-06-24 15:12:31 [restartedMain] INFO  o.s.c.c.c.ConfigServerConfigDataLoader - Fetching config from server at : http://localhost:8080
+2025-06-24 15:12:31 [restartedMain] INFO  o.s.c.c.c.ConfigServerConfigDataLoader - Located environment: name=serviceUser, profiles=[dev], label=null, version=79ab4ffa905d6e5f801781a94f3c6122cd1c5060, state=null
+2025-06-24 15:12:31 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - Devtools property defaults active! Set 'spring.devtools.add-properties' to 'false' to disable
+2025-06-24 15:12:31 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - For additional web related logging consider setting the 'logging.level.web' property to 'DEBUG'
+2025-06-24 15:12:34 [restartedMain] WARN  o.s.b.w.s.c.AnnotationConfigServletWebServerApplicationContext - Exception encountered during context initialization - cancelling refresh attempt: org.springframework.beans.factory.BeanDefinitionStoreException: Failed to parse configuration class [com.m1_fonda.serviceUser.ServiceUserApplication]
+2025-06-24 15:12:34 [restartedMain] ERROR o.s.boot.SpringApplication - Application run failed
+org.springframework.beans.factory.BeanDefinitionStoreException: Failed to parse configuration class [com.m1_fonda.serviceUser.ServiceUserApplication]
+	at org.springframework.context.annotation.ConfigurationClassParser.parse(ConfigurationClassParser.java:179)
+	at org.springframework.context.annotation.ConfigurationClassPostProcessor.processConfigBeanDefinitions(ConfigurationClassPostProcessor.java:417)
+	at org.springframework.context.annotation.ConfigurationClassPostProcessor.postProcessBeanDefinitionRegistry(ConfigurationClassPostProcessor.java:290)
+	at org.springframework.context.support.PostProcessorRegistrationDelegate.invokeBeanDefinitionRegistryPostProcessors(PostProcessorRegistrationDelegate.java:349)
+	at org.springframework.context.support.PostProcessorRegistrationDelegate.invokeBeanFactoryPostProcessors(PostProcessorRegistrationDelegate.java:118)
+	at org.springframework.context.support.AbstractApplicationContext.invokeBeanFactoryPostProcessors(AbstractApplicationContext.java:789)
+	at org.springframework.context.support.AbstractApplicationContext.refresh(AbstractApplicationContext.java:607)
+	at org.springframework.boot.web.servlet.context.ServletWebServerApplicationContext.refresh(ServletWebServerApplicationContext.java:146)
+	at org.springframework.boot.SpringApplication.refresh(SpringApplication.java:754)
+	at org.springframework.boot.SpringApplication.refreshContext(SpringApplication.java:456)
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:335)
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1363)
+	at org.springframework.boot.SpringApplication.run(SpringApplication.java:1352)
+	at com.m1_fonda.serviceUser.ServiceUserApplication.main(ServiceUserApplication.java:12)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:77)
+	at java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:568)
+	at org.springframework.boot.devtools.restart.RestartLauncher.run(RestartLauncher.java:50)
+Caused by: org.springframework.context.annotation.ConflictingBeanDefinitionException: Annotation-specified bean name 'securityConfig' for bean class [com.m1_fonda.serviceUser.service.exceptions.SecurityConfig] conflicts with existing, non-compatible bean definition of same name and class [com.m1_fonda.serviceUser.security.SecurityConfig]
+	at org.springframework.context.annotation.ClassPathBeanDefinitionScanner.checkCandidate(ClassPathBeanDefinitionScanner.java:361)
+	at org.springframework.context.annotation.ClassPathBeanDefinitionScanner.doScan(ClassPathBeanDefinitionScanner.java:288)
+	at org.springframework.context.annotation.ComponentScanAnnotationParser.parse(ComponentScanAnnotationParser.java:128)
+	at org.springframework.context.annotation.ConfigurationClassParser.doProcessConfigurationClass(ConfigurationClassParser.java:306)
+	at org.springframework.context.annotation.ConfigurationClassParser.processConfigurationClass(ConfigurationClassParser.java:246)
+	at org.springframework.context.annotation.ConfigurationClassParser.parse(ConfigurationClassParser.java:197)
+	at org.springframework.context.annotation.ConfigurationClassParser.parse(ConfigurationClassParser.java:165)
+	... 18 common frames omitted
+2025-06-24 15:18:15 [restartedMain] INFO  c.m.s.ServiceUserApplication - Starting ServiceUserApplication using Java 17.0.14 with PID 18196 (C:\Users\Swaggie\Documents\GitHub\lorie-lorene-ENSF.Wallet-app\serviceUser\target\classes started by Swaggie in C:\Users\Swaggie\Documents\GitHub\lorie-lorene-ENSF.Wallet-app\serviceUser)
+2025-06-24 15:18:15 [restartedMain] DEBUG c.m.s.ServiceUserApplication - Running with Spring Boot v3.3.4, Spring v6.1.13
+2025-06-24 15:18:15 [restartedMain] INFO  c.m.s.ServiceUserApplication - The following 1 profile is active: "dev"
+2025-06-24 15:18:16 [restartedMain] INFO  o.s.c.c.c.ConfigServerConfigDataLoader - Fetching config from server at : http://localhost:8080
+2025-06-24 15:18:16 [restartedMain] INFO  o.s.c.c.c.ConfigServerConfigDataLoader - Located environment: name=serviceUser, profiles=[default], label=null, version=79ab4ffa905d6e5f801781a94f3c6122cd1c5060, state=null
+2025-06-24 15:18:16 [restartedMain] INFO  o.s.c.c.c.ConfigServerConfigDataLoader - Fetching config from server at : http://localhost:8080
+2025-06-24 15:18:16 [restartedMain] INFO  o.s.c.c.c.ConfigServerConfigDataLoader - Located environment: name=serviceUser, profiles=[dev], label=null, version=79ab4ffa905d6e5f801781a94f3c6122cd1c5060, state=null
+2025-06-24 15:18:16 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - Devtools property defaults active! Set 'spring.devtools.add-properties' to 'false' to disable
+2025-06-24 15:18:16 [restartedMain] INFO  o.s.b.d.e.DevToolsPropertyDefaultsPostProcessor - For additional web related logging consider setting the 'logging.level.web' property to 'DEBUG'
+2025-06-24 15:18:30 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Bootstrapping Spring Data MongoDB repositories in DEFAULT mode.
+2025-06-24 15:18:32 [restartedMain] INFO  o.s.d.r.c.RepositoryConfigurationDelegate - Finished Spring Data repository scanning in 1448 ms. Found 1 MongoDB repository interface.
+2025-06-24 15:18:35 [restartedMain] INFO  o.s.cloud.context.scope.GenericScope - BeanFactory id=b29dffc3-556e-3d3d-bbfb-16bce752d203
+2025-06-24 15:18:37 [restartedMain] WARN  o.s.c.s.PostProcessorRegistrationDelegate$BeanPostProcessorChecker - Bean 'org.springframework.cloud.client.loadbalancer.LoadBalancerAutoConfiguration$DeferringLoadBalancerInterceptorConfig' of type [org.springframework.cloud.client.loadbalancer.LoadBalancerAutoConfiguration$DeferringLoadBalancerInterceptorConfig] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). The currently created BeanPostProcessor [lbRestClientPostProcessor] is declared through a non-static factory method on that class; consider declaring it as static instead.
+2025-06-24 15:18:37 [restartedMain] WARN  o.s.c.s.PostProcessorRegistrationDelegate$BeanPostProcessorChecker - Bean 'deferringLoadBalancerInterceptor' of type [org.springframework.cloud.client.loadbalancer.DeferringLoadBalancerInterceptor] is not eligible for getting processed by all BeanPostProcessors (for example: not eligible for auto-proxying). Is this bean getting eagerly injected into a currently created BeanPostProcessor [lbRestClientPostProcessor]? Check the corresponding BeanPostProcessor declaration and its dependencies.
+2025-06-24 15:18:41 [restartedMain] INFO  o.s.b.w.e.tomcat.TomcatWebServer - Tomcat initialized with port 8091 (http)
+2025-06-24 15:18:41 [restartedMain] INFO  o.a.catalina.core.StandardService - Starting service [Tomcat]
+2025-06-24 15:18:41 [restartedMain] INFO  o.a.catalina.core.StandardEngine - Starting Servlet engine: [Apache Tomcat/10.1.30]
+2025-06-24 15:18:42 [restartedMain] INFO  o.a.c.c.C.[Tomcat].[localhost].[/] - Initializing Spring embedded WebApplicationContext
+2025-06-24 15:18:42 [restartedMain] INFO  o.s.b.w.s.c.ServletWebServerApplicationContext - Root WebApplicationContext: initialization completed in 26439 ms
+2025-06-24 15:18:46 [restartedMain] DEBUG c.m.s.s.JwtAuthenticationFilter - Filter 'jwtAuthenticationFilter' configured for use
+2025-06-24 15:18:47 [restartedMain] WARN  o.s.b.w.s.c.AnnotationConfigServletWebServerApplicationContext - Exception encountered during context initialization - cancelling refresh attempt: org.springframework.beans.factory.UnsatisfiedDependencyException: Error creating bean with name 'authenticationService' defined in file [C:\Users\Swaggie\Documents\GitHub\lorie-lorene-ENSF.Wallet-app\serviceUser\target\classes\com\m1_fonda\serviceUser\service\AuthenticationService.class]: Unsatisfied dependency expressed through constructor parameter 0: Error creating bean with name 'userRepository' defined in com.m1_fonda.serviceUser.repository.UserRepository defined in @EnableMongoRepositories declared on MongoRepositoriesRegistrar.EnableMongoRepositoriesConfiguration: Cannot resolve reference to bean 'mongoTemplate' while setting bean property 'mongoOperations'
+2025-06-24 15:18:47 [restartedMain] INFO  o.a.catalina.core.StandardService - Stopping service [Tomcat]
+2025-06-24 15:18:47 [restartedMain] INFO  o.s.b.a.l.ConditionEvaluationReportLogger - 
+
+Error starting ApplicationContext. To display the condition evaluation report re-run your application with 'debug' enabled.
+2025-06-24 15:18:48 [restartedMain] ERROR o.s.b.d.LoggingFailureAnalysisReporter - 
+
+***************************
+APPLICATION FAILED TO START
+***************************
+
+Description:
+
+Failed to bind properties under 'spring.data.mongodb.password' to char[]:
+
+    Property: spring.data.mongodb.password
+    Value: "${MONGODB_PASSWORD:}"
+    Origin: class path resource [application.yml] - 34:17
+    Reason: java.lang.NullPointerException: Cannot invoke "java.util.Collection.toArray()" because "c" is null
+
+Action:
+
+Update your application's configuration
+
