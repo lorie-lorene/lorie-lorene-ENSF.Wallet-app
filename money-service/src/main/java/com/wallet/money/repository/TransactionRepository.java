@@ -36,4 +36,16 @@ public interface TransactionRepository extends MongoRepository<Transaction, Stri
     // Transactions expirées (pour nettoyage)
     @Query("{ 'status': 'PENDING', 'expiredAt': { $lt: ?0 } }")
     List<Transaction> findExpiredTransactions(java.time.LocalDateTime now);
+
+    Optional<Transaction> findByExternalIdAndClientId(String externalId, String clientId);
+
+    List<Transaction> findByClientIdAndTypeOrderByCreatedAtDesc(String clientId, String type);
+
+    List<Transaction> findByClientIdAndTypeAndIdCarteOrderByCreatedAtDesc(String clientId, String type, String idCarte);
+
+    @Query("{'clientId': ?0, 'type': 'CARD_WITHDRAWAL', 'createdAt': {$gte: ?1}}")
+    List<Transaction> findCardWithdrawalsByClientAndDate(String clientId, LocalDateTime startDate);
+
+    @Query("{'type': 'CARD_WITHDRAWAL', 'status': 'PENDING', 'createdAt': {$lt: ?0}}")
+    List<Transaction> findExpiredCardWithdrawals(LocalDateTime expiredBefore);
 }

@@ -52,4 +52,37 @@ public class WebhookController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
+     /**
+     * NOUVEAU WEBHOOK: Spécifique aux retraits depuis carte
+     */
+    @PostMapping("/card-withdrawal")
+    public ResponseEntity<Void> handleCardWithdrawalNotification(@RequestBody String rawBody) {
+        log.info("📨 Webhook retrait carte reçu - Raw payload = «{}»", rawBody);
+
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            PaymentResponse paymentResponse = mapper.readValue(rawBody, PaymentResponse.class);
+
+            if (paymentResponse == null || paymentResponse.getReference() == null) {
+                log.warn("⚠️ Webhook retrait carte invalide");
+                return ResponseEntity.badRequest().build();
+            }
+
+            String reference = paymentResponse.getReference();
+            String status = paymentResponse.getStatus();
+            String message = paymentResponse.getMessage();
+
+            log.info("🔄 Webhook retrait carte - Référence: {} | Statut: {}", reference, status);
+
+            // Utiliser la même logique mais avec gestion spécifique aux retraits carte
+            transactionService.updateCardWithdrawalStatusFromWebhook(reference, status, message);
+
+            log.info("✅ Webhook retrait carte traité - Référence: {}", reference);
+            return ResponseEntity.ok().build();
+
+        } catch (Exception e) {
+            log.error("❌ Erreur webhook retrait carte: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
 }
