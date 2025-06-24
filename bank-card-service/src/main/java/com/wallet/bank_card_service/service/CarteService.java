@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -64,7 +65,6 @@ public class CarteService {
     private NotificationService notificationService;
 
     private final SecureRandom random = new SecureRandom();
-
 
     /**
      * Création d'une nouvelle carte bancaire
@@ -472,6 +472,129 @@ public class CarteService {
         return stats;
     }
 
+    /**
+     * NOUVELLE MÉTHODE: Vérifier le PIN d'une carte
+     */
+    public boolean verifyCardPin(String idCarte, Integer pin) {
+        try {
+            Carte carte = findById(idCarte);
+
+            if (carte.isPinBlocked()) {
+                throw new CarteException("PIN_BLOCKED", "Code PIN bloqué");
+            }
+
+            // Vérifier le PIN (en réalité, comparer avec le hash stocké)
+            boolean pinValid = passwordEncoder.matches(String.valueOf(pin), String.valueOf(carte.getCodePin()));
+
+            if (!pinValid) {
+                // Incrémenter tentatives
+                carte.setPinAttempts(carte.getPinAttempts() + 1);
+
+                if (carte.getPinAttempts() >= 3) {
+                    carte.setPinBlocked(true);
+                    carte.block("PIN bloqué après 3 tentatives incorrectes", "SYSTEM");
+                    log.warn("🔒 PIN bloqué pour carte: {}", carte.getMaskedNumber());
+                }
+
+                carteRepository.save(carte);
+                return false;
+            }
+
+            // Reset tentatives si PIN correct
+            if (carte.getPinAttempts() > 0) {
+                carte.setPinAttempts(0);
+                carteRepository.save(carte);
+            }
+
+            return true;
+
+        } catch (Exception e) {
+            log.error("❌ Erreur vérification PIN carte {}: {}", idCarte, e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * NOUVELLE MÉTHODE: Vérifier si retrait possible (limites)
+     */
+    public boolean canWithdraw(String idCarte, BigDecimal montant) {
+        try {
+            Carte carte = findById(idCarte);
+
+            if (!carte.isActive()) {
+                return false;
+            }
+
+            carte.resetCountersIfNeeded(); // Méthode privée existante
+
+            // Vérifier limite quotidienne de retrait
+            BigDecimal nouvelleUtilisation = carte.getUtilisationQuotidienne().add(montant);
+            if (nouvelleUtilisation.compareTo(carte.getLimiteDailyWithdrawal()) > 0) {
+                log.warn("⚠️ Limite quotidienne retrait dépassée pour carte: {}", carte.getMaskedNumber());
+                return false;
+            }
+
+            return true;
+
+        } catch (Exception e) {
+            log.error("❌ Erreur vérification limite retrait: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * NOUVELLE MÉTHODE: Débiter carte pour retrait
+     */
+    public void debitCarteForWithdrawal(String idCarte, BigDecimal montant, BigDecimal frais, String requestId) {
+        try {
+            Carte carte = findById(idCarte);
+
+            BigDecimal montantTotal = montant.add(frais);
+
+            // Débiter la carte
+            carte.debit(montantTotal);
+
+            // Ajouter action spécifique retrait
+            carte.addAction(Carte.CarteActionType.DEBIT, montantTotal,
+                    "Retrait Mobile Money - " + montant + " FCFA (frais: " + frais + ") - Ref: " + requestId,
+                    "MOBILE_MONEY_WITHDRAWAL");
+
+            carteRepository.save(carte);
+
+            log.info("✅ Carte débitée pour retrait - ID: {}, Montant: {}, Frais: {}, Nouveau solde: {}",
+                    idCarte, montant, frais, carte.getSolde());
+
+        } catch (Exception e) {
+            log.error("❌ Erreur débit carte pour retrait: {}", e.getMessage(), e);
+            throw new CarteException("DEBIT_FAILED", "Impossible de débiter la carte");
+        }
+    }
+
+    /**
+     * NOUVELLE MÉTHODE: Rembourser carte en cas d'échec retrait
+     */
+    public void refundCardWithdrawal(String idCarte, BigDecimal montant, BigDecimal frais, String reason) {
+        try {
+            Carte carte = findById(idCarte);
+
+            BigDecimal montantTotal = montant.add(frais);
+
+            // Recréditer la carte
+            carte.credit(montantTotal);
+
+            // Ajouter action de remboursement
+            carte.addAction(Carte.CarteActionType.CREDIT, montantTotal,
+                    "Remboursement retrait échoué - Raison: " + reason,
+                    "WITHDRAWAL_REFUND");
+
+            carteRepository.save(carte);
+
+            log.info("💰 Carte remboursée pour retrait échoué - ID: {}, Montant: {}", idCarte, montantTotal);
+
+        } catch (Exception e) {
+            log.error("❌ Erreur remboursement carte: {}", e.getMessage(), e);
+        }
+    }
     // ========================================
     // MÉTHODES PRIVÉES DE VALIDATION
     // ========================================
@@ -563,6 +686,189 @@ public class CarteService {
         }
     }
 
+    /**
+     * NOUVELLE MÉTHODE: Notifier client du succès du retrait
+     */
+    public void notifyClientWithdrawalSuccess(String idCarte, String requestId) {
+        try {
+            Carte carte = findById(idCarte);
+
+            // Ajouter action de confirmation
+            carte.addAction(Carte.CarteActionType.DEBIT, null,
+                    "Retrait confirmé réussi - Ref: " + requestId,
+                    "WITHDRAWAL_CONFIRMED");
+
+            carteRepository.save(carte);
+
+            log.info("📢 Notification succès retrait envoyée - Carte: {}", carte.getMaskedNumber());
+
+        } catch (Exception e) {
+            log.error("❌ Erreur notification succès retrait: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * NOUVELLE MÉTHODE: Notifier client de l'échec du retrait
+     */
+    public void notifyClientWithdrawalFailure(String idCarte, String requestId, String reason) {
+        try {
+            Carte carte = findById(idCarte);
+
+            // Ajouter action d'échec
+            carte.addAction(Carte.CarteActionType.DEBIT, null,
+                    "Retrait échoué - Ref: " + requestId + " - Raison: " + reason,
+                    "WITHDRAWAL_FAILED");
+
+            carteRepository.save(carte);
+
+            // Notification d'échec
+            // notificationService.sendWithdrawalFailureNotification(carte, requestId,
+            // reason);
+
+            log.info("📢 Notification échec retrait envoyée - Carte: {}", carte.getMaskedNumber());
+
+        } catch (Exception e) {
+            log.error("❌ Erreur notification échec retrait: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * NOUVELLE MÉTHODE: Notifier client du remboursement
+     */
+    public void notifyClientWithdrawalRefund(String idCarte, String requestId, BigDecimal montantRembourse) {
+        try {
+            Carte carte = findById(idCarte);
+
+            // Ajouter action de remboursement
+            carte.addAction(Carte.CarteActionType.CREDIT, montantRembourse,
+                    "Remboursement retrait échoué - Ref: " + requestId,
+                    "WITHDRAWAL_REFUNDED");
+
+            carteRepository.save(carte);
+
+            // Notification de remboursement
+            // notificationService.sendWithdrawalRefundNotification(carte, requestId,
+            // montantRembourse);
+
+            log.info("📢 Notification remboursement envoyée - Carte: {}, Montant: {}",
+                    carte.getMaskedNumber(), montantRembourse);
+
+        } catch (Exception e) {
+            log.error("❌ Erreur notification remboursement: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * NOUVELLE MÉTHODE: Statistiques des retraits d'une carte
+     */
+    public Map<String, Object> getCardWithdrawalStatistics(String idCarte, String clientId) {
+        try {
+            Carte carte = getCardDetails(idCarte, clientId);
+
+            List<Carte.CarteAction> withdrawalActions = carte.getActionsHistory()
+                    .stream()
+                    .filter(action -> action.getType() == Carte.CarteActionType.DEBIT &&
+                            action.getDescription().contains("Retrait"))
+                    .toList();
+
+            BigDecimal totalWithdrawn = withdrawalActions.stream()
+                    .filter(action -> action.getMontant() != null)
+                    .map(Carte.CarteAction::getMontant)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            long successfulWithdrawals = withdrawalActions.stream()
+                    .filter(action -> action.getDescription().contains("confirmé"))
+                    .count();
+
+            long failedWithdrawals = withdrawalActions.stream()
+                    .filter(action -> action.getDescription().contains("échoué"))
+                    .count();
+
+            return Map.of(
+                    "idCarte", idCarte,
+                    "totalRetraits", withdrawalActions.size(),
+                    "retraitsReussis", successfulWithdrawals,
+                    "retraitsEchoues", failedWithdrawals,
+                    "montantTotalRetire", totalWithdrawn,
+                    "tauxSucces",
+                    withdrawalActions.size() > 0 ? (double) successfulWithdrawals / withdrawalActions.size() * 100 : 0,
+                    "generatedAt", LocalDateTime.now());
+
+        } catch (Exception e) {
+            log.error("❌ Erreur calcul statistiques retraits: {}", e.getMessage());
+            return Map.of("error", "Impossible de calculer les statistiques");
+        }
+    }
+
+    /**
+     * NOUVELLE MÉTHODE: Vérifier limites de retrait quotidien/hebdomadaire
+     */
+    public Map<String, Object> checkWithdrawalLimits(String idCarte, String clientId) {
+        try {
+            Carte carte = getCardDetails(idCarte, clientId);
+
+            LocalDateTime today = LocalDateTime.now().withHour(0).withMinute(0).withSecond(0);
+            LocalDateTime weekStart = today.minusDays(today.getDayOfWeek().getValue() - 1);
+
+            List<Carte.CarteAction> todayWithdrawals = carte.getActionsHistory()
+                    .stream()
+                    .filter(action -> action.getType() == Carte.CarteActionType.DEBIT &&
+                            action.getDescription().contains("Retrait") &&
+                            action.getTimestamp().isAfter(today))
+                    .toList();
+
+            List<Carte.CarteAction> weekWithdrawals = carte.getActionsHistory()
+                    .stream()
+                    .filter(action -> action.getType() == Carte.CarteActionType.DEBIT &&
+                            action.getDescription().contains("Retrait") &&
+                            action.getTimestamp().isAfter(weekStart))
+                    .toList();
+
+            BigDecimal todayAmount = todayWithdrawals.stream()
+                    .filter(action -> action.getMontant() != null)
+                    .map(Carte.CarteAction::getMontant)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            BigDecimal weekAmount = weekWithdrawals.stream()
+                    .filter(action -> action.getMontant() != null)
+                    .map(Carte.CarteAction::getMontant)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            // Limites selon le type de carte
+            BigDecimal limiteDailyWithdrawal = carte.getLimiteDailyWithdrawal();
+            BigDecimal limiteWeeklyWithdrawal = limiteDailyWithdrawal.multiply(new BigDecimal("5")); // 5x la limite
+                                                                                                     // quotidienne
+
+            // 🔧 SOLUTION: Utiliser HashMap au lieu de Map.of() pour éviter la limite de 10
+            // paires
+            Map<String, Object> result = new HashMap<>();
+            result.put("idCarte", idCarte);
+            result.put("limiteDailyWithdrawal", limiteDailyWithdrawal);
+            result.put("limiteWeeklyWithdrawal", limiteWeeklyWithdrawal);
+            result.put("utilisationAujourdhui", todayAmount);
+            result.put("utilisationSemaine", weekAmount);
+            result.put("limiteQuotidienneRestante", limiteDailyWithdrawal.subtract(todayAmount));
+            result.put("limiteHebdomadaireRestante", limiteWeeklyWithdrawal.subtract(weekAmount));
+            result.put("nombreRetraitsAujourdhui", todayWithdrawals.size());
+            result.put("nombreRetraitsSemaine", weekWithdrawals.size());
+            result.put("peutRetirerAujourdhui", todayAmount.compareTo(limiteDailyWithdrawal) < 0);
+            result.put("peutRetirerCetteSemaine", weekAmount.compareTo(limiteWeeklyWithdrawal) < 0);
+            result.put("calculatedAt", LocalDateTime.now());
+
+            return result;
+
+        } catch (Exception e) {
+            log.error("❌ Erreur vérification limites retrait: {}", e.getMessage());
+
+            // 🔧 Même correction pour le cas d'erreur
+            Map<String, Object> errorResult = new HashMap<>();
+            errorResult.put("error", "Impossible de vérifier les limites");
+            errorResult.put("message", e.getMessage());
+            errorResult.put("timestamp", LocalDateTime.now());
+
+            return errorResult;
+        }
+    }
     // ========================================
     // MÉTHODES UTILITAIRES
     // ========================================

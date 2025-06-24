@@ -154,7 +154,7 @@ public class Carte {
     /**
      * Reset des compteurs quotidiens/mensuels
      */
-    private void resetCountersIfNeeded() {
+    public void resetCountersIfNeeded() {
         LocalDateTime now = LocalDateTime.now();
         
         // Reset quotidien

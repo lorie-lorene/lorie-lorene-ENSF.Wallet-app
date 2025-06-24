@@ -18,6 +18,8 @@ import com.wallet.bank_card_service.dto.CarteOperationResult;
 import com.wallet.bank_card_service.dto.CarteSettingsRequest;
 import com.wallet.bank_card_service.dto.CarteStatistiques;
 import com.wallet.bank_card_service.dto.CarteType;
+import com.wallet.bank_card_service.dto.CarteWithdrawalRequest;
+import com.wallet.bank_card_service.dto.CarteWithdrawalResult;
 import com.wallet.bank_card_service.dto.OrangeMoneyRechargeRequest;
 import com.wallet.bank_card_service.dto.PinChangeRequest;
 import com.wallet.bank_card_service.dto.RechargeResult;
@@ -697,6 +699,133 @@ public class CarteController {
                     RechargeResult.failed("Erreur technique: " + e.getMessage()));
         }
     }
+    /**
+     * NOUVELLE MÉTHODE: Retrait depuis carte vers Orange/MTN Money
+     */
+    @PostMapping("/{idCarte}/withdraw-to-mobile-money")
+    @PreAuthorize("hasRole('CLIENT')")
+    @Operation(summary = "Retirer de l'argent d'une carte vers Orange/MTN Money")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Retrait initié avec succès"),
+            @ApiResponse(responseCode = "400", description = "Données invalides"),
+            @ApiResponse(responseCode = "402", description = "Solde carte insuffisant"),
+            @ApiResponse(responseCode = "403", description = "Carte non autorisée ou PIN incorrect")
+    })
+    public ResponseEntity<CarteWithdrawalResult> withdrawToMobileMoney(
+            @PathVariable String idCarte,
+            @RequestBody @Valid CarteWithdrawalRequest request,
+            Authentication authentication) {
+
+        try {
+            log.info("💸 [WITHDRAWAL] Demande retrait - Carte: {}, Montant: {}, Provider: {}", 
+                    idCarte, request.getMontant(), request.getProvider());
+
+            String clientId = authentication.getName();
+
+            // 1. Vérifier que la carte appartient au client et est active
+            Carte carte = carteService.findById(idCarte);
+            if (carte == null || !carte.getIdClient().equals(clientId)) {
+                return ResponseEntity.badRequest().body(
+                        CarteWithdrawalResult.failed("Carte non trouvée ou non autorisée"));
+            }
+
+            if (!carte.isActive()) {
+                return ResponseEntity.badRequest().body(
+                        CarteWithdrawalResult.failed("Carte non active"));
+            }
+
+            // 2. Vérifier le PIN de la carte
+            if (!carteService.verifyCardPin(idCarte, request.getCodePin())) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(
+                        CarteWithdrawalResult.failed("Code PIN incorrect"));
+            }
+
+            // 3. Vérifier limites de retrait quotidien
+            if (!carteService.canWithdraw(idCarte, request.getMontant())) {
+                return ResponseEntity.badRequest().body(
+                        CarteWithdrawalResult.failed("Limite de retrait quotidien atteinte"));
+            }
+
+            // 4. Vérifier solde carte suffisant (inclus les frais)
+            BigDecimal fraisEstimes = calculateWithdrawalFees(request.getMontant());
+            BigDecimal montantTotal = request.getMontant().add(fraisEstimes);
+            
+            if (carte.getSolde().compareTo(montantTotal) < 0) {
+                return ResponseEntity.status(HttpStatus.PAYMENT_REQUIRED).body(
+                        CarteWithdrawalResult.failed("Solde insuffisant. Requis: " + montantTotal + " FCFA"));
+            }
+
+            // 5. Appeler le service Money pour initier le retrait
+            Map<String, Object> moneyResponse = moneyServiceClient.initiateCardWithdrawal(idCarte, request, clientId);
+
+            String status = (String) moneyResponse.get("status");
+            String message = (String) moneyResponse.get("message");
+            String requestId = (String) moneyResponse.get("reference");
+
+            if ("SUCCESS".equals(status) || "PENDING".equals(status)) {
+                // 6. Débiter immédiatement la carte (le Money Service gère les remboursements en cas d'échec)
+                carteService.debitCarteForWithdrawal(idCarte, request.getMontant(), fraisEstimes, requestId);
+                
+                return ResponseEntity.ok(CarteWithdrawalResult.success(
+                        requestId, idCarte, request.getMontant(), fraisEstimes, 
+                        carte.getSolde().subtract(montantTotal), request.getProvider(), message));
+            } else {
+                return ResponseEntity.badRequest().body(CarteWithdrawalResult.failed(message));
+            }
+
+        } catch (Exception e) {
+            log.error("❌ [WITHDRAWAL] Erreur: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest().body(
+                    CarteWithdrawalResult.failed("Erreur technique: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Historique des retraits d'une carte
+     */
+    @GetMapping("/{idCarte}/withdrawal-history")
+    @PreAuthorize("hasRole('CLIENT')")
+    @Operation(summary = "Historique des retraits d'une carte")
+    public ResponseEntity<List<Carte.CarteAction>> getCardWithdrawalHistory(
+            @PathVariable @NotBlank String idCarte,
+            @RequestParam(defaultValue = "20") int limit,
+            Authentication authentication) {
+
+        try {
+            String clientId = extractClientId(authentication);
+            Carte carte = carteService.getCardDetails(idCarte, clientId);
+
+            List<Carte.CarteAction> withdrawals = carte.getActionsHistory()
+                    .stream()
+                    .filter(action -> action.getType() == Carte.CarteActionType.DEBIT && 
+                                    action.getDescription().contains("Retrait"))
+                    .limit(limit)
+                    .toList();
+
+            return ResponseEntity.ok(withdrawals);
+
+        } catch (Exception e) {
+            log.error("❌ Erreur récupération historique retraits: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    // Méthode utilitaire pour calculer les frais
+    private BigDecimal calculateWithdrawalFees(BigDecimal montant) {
+        // Même logique que Money Service: utiliser leurs frais existants
+        // Par exemple: 1% du montant avec min 100 FCFA et max 1000 FCFA
+        BigDecimal frais = montant.multiply(new BigDecimal("0.01"));
+        
+        if (frais.compareTo(new BigDecimal("100")) < 0) {
+            frais = new BigDecimal("100");
+        } else if (frais.compareTo(new BigDecimal("1000")) > 0) {
+            frais = new BigDecimal("1000");
+        }
+        
+        return frais;
+    }
+
+
 
     // ========================================
     // GESTION D'ERREURS
