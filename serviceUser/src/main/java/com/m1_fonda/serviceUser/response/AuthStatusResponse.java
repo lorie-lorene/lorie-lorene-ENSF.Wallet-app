@@ -27,7 +27,7 @@ public class AuthStatusResponse {
     
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime lastLogin;
-    
-    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
-    private LocalDateTime checkedAt = LocalDateTime.now();
+
+    // @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
+    // private LocalDateTime checkedAt = LocalDateTime.now();
 }

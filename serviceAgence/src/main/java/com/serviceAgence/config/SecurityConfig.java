@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -57,7 +58,9 @@ public class SecurityConfig {
             // Configuration des autorisations
             .authorizeHttpRequests(authz -> authz
                 // Endpoints publics
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll() // 🔓 Allow preflight requests
                 .requestMatchers("/api/v1/agence/auth/**").permitAll()
+
                 .requestMatchers("/api/v1/agence/health").permitAll()
                 .requestMatchers("/actuator/**").permitAll()
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()

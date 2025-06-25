@@ -72,11 +72,12 @@ public class AgenceService {
             }
 
             // 2. Validation KYC des documents
-            KYCValidationResult kycResult = kycService.validateDocuments(
+            KYCValidationResult kycResult = kycService.validateDocumentsWithSelfie(
                 request.getIdClient(), 
                 request.getCni(),
                 request.getRectoCni(),
-                request.getVersoCni()
+                request.getVersoCni(),
+                request.getSelfieImage()
             );
 
             if (!kycResult.isValid()) {

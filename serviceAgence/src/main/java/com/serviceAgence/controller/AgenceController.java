@@ -275,12 +275,13 @@ public class AgenceController {
             @RequestParam @NotBlank String idClient,
             @RequestParam @NotBlank String cni,
             @RequestParam(required = false) byte[] rectoCni,
-            @RequestParam(required = false) byte[] versoCni) {
+            @RequestParam(required = false) byte[] versoCni,
+            @RequestParam(required = false) byte[] selfie) {
 
         try {
             log.info("Validation KYC manuelle pour client: {}", idClient);
 
-            KYCValidationResult result = kycService.validateDocuments(idClient, cni, rectoCni, versoCni);
+            KYCValidationResult result = kycService.validateDocumentsWithSelfie(idClient, cni, rectoCni, versoCni, selfie);
 
             if (result.isValid()) {
                 return ResponseEntity.ok(result);

@@ -40,6 +40,8 @@ public class AgenceEventPublisher {
             event.setNumeroCompte(result.getNumeroCompte());
             event.setTimestamp(LocalDateTime.now());
 
+            event.setTargetService("UserService");
+
             rabbitTemplate.convertAndSend(AGENCE_EXCHANGE, "agence.registration.response", event);
 
             log.info("Réponse création compte envoyée: client={}, statut={}",

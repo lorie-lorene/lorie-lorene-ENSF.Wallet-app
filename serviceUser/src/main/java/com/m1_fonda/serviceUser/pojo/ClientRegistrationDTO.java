@@ -39,13 +39,22 @@ public class ClientRegistrationDTO {
     private String rectoCni;
     private String versoCni;
 
-    /**
-     * Image selfie de l'utilisateur (Base64 encoded)
+   /**
+     * Selfie image for biometric verification (Base64 encoded)
+     * This field works with the existing Client.selfieImage field
      */
-    @NotBlank(message = "Selfie utilisateur obligatoire")
-    @Size(min = 100, message = "Selfie invalide")
+    @NotBlank(message = "La photo selfie est obligatoire pour la vérification d'identité")
+    @Size(min = 1000, message = "La photo selfie semble trop petite")
     private String selfieImage;
 
+    // Getter and Setter
+    public String getSelfieImage() {
+        return selfieImage;
+    }
+
+    public void setSelfieImage(String selfieImage) {
+        this.selfieImage = selfieImage;
+    }
     /**
      * Validation du format du selfie
      */

@@ -111,6 +111,13 @@ public class UserService {
         if (registration.getVersoCni() != null) {
             client.setVersoCni(registration.getVersoCni());
         }
+        if (registration.getSelfieImage() != null) {
+            client.setSelfieImage(registration.getSelfieImage());
+            client.setSelfieFileSize((long) registration.getSelfieImage().length());
+        } else {
+            throw new BusinessValidationException("Selfie image is required for identity verification");
+            
+        }
         
         // Metadata
         client.setCreatedAt(LocalDateTime.now());
@@ -563,27 +570,24 @@ public class UserService {
     }
 
     /**
-     * Création client sécurisée avec selfie
+     * Update the existing createSecureClient method to properly use selfieImage
      */
     private Client createSecureClient(ClientRegistrationDTO request) {
         Client client = new Client();
         client.setIdClient(UUID.randomUUID().toString());
         client.setCni(request.getCni());
-        client.setEmail(request.getEmail());
+        client.setEmail(request.getEmail().toLowerCase());
         client.setNom(request.getNom().toUpperCase());
         client.setPrenom(request.getPrenom());
         client.setNumero(request.getNumero());
         client.setIdAgence(request.getIdAgence());
-        
-        // Hash du mot de passe
-        client.setPassword(passwordEncoder.encode(request.getPassword()));
-        
-        // Documents KYC
         client.setRectoCni(request.getRectoCni());
         client.setVersoCni(request.getVersoCni());
-        client.setSelfieImage(request.getSelfieImage()); // ← NEW: Store selfie
         
-        // Métadonnées selfie
+        // Use existing selfieImage field
+        client.setSelfieImage(request.getSelfieImage());
+        
+        // Set selfie metadata using existing fields
         if (request.getSelfieImage() != null) {
             try {
                 String base64Data = extractBase64Data(request.getSelfieImage());
@@ -591,18 +595,24 @@ public class UserService {
                 client.setSelfieFileSize((long) selfieBytes.length);
                 client.setSelfieUploadedAt(LocalDateTime.now());
                 
-                log.info("📸 Selfie traité pour client: {} - Taille: {} KB", 
+                log.info("Selfie traité pour client: {} - Taille: {}KB", 
                         client.getEmail(), selfieBytes.length / 1024);
             } catch (Exception e) {
-                log.warn("⚠️ Erreur traitement métadonnées selfie pour {}: {}", 
+                log.warn("Erreur traitement métadonnées selfie pour {}: {}", 
                         client.getEmail(), e.getMessage());
             }
         }
-        
-        // Statut et audit
+
+        // SÉCURITÉ : Hash du mot de passe
+        String salt = generateSalt();
+        String passwordHash = passwordEncoder.encode(request.getPassword() + salt);
+
+        client.setPasswordHash(passwordHash);
+        client.setSalt(salt);
+        client.setPasswordChangedAt(LocalDateTime.now());
         client.setStatus(ClientStatus.PENDING);
         client.setCreatedAt(LocalDateTime.now());
-        
+
         return client;
     }
 

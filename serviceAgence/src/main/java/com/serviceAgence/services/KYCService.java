@@ -32,9 +32,9 @@ public class KYCService {
     /**
      * Validation complète des documents KYC
      */
-    public KYCValidationResult validateDocuments(String idClient, String cni, 
-                                                byte[] rectoImage, byte[] versoImage) {
-        log.info("Début validation KYC pour client: {}", idClient);
+    public KYCValidationResult validateDocumentsWithSelfie(String idClient, String cni, 
+                                                        byte[] rectoImage, byte[] versoImage, byte[] selfieImage) {
+        log.info("Début validation KYC complète avec selfie pour client: {}", idClient);
 
         try {
             // 1. Validation format CNI
@@ -49,53 +49,231 @@ public class KYCService {
                     "Cette CNI est déjà associée à un autre compte");
             }
 
-            // 3. Validation qualité des images
-            DocumentKYC document = new DocumentKYC();
-            document.setIdClient(idClient);
-            document.setType(DocumentType.CNI_CAMEROUNAISE);
-            document.setNumeroDocument(cni);
+            // 3. Validation présence des 3 documents requis
+            if (rectoImage == null || versoImage == null) {
+                return KYCValidationResult.rejected("DOCUMENTS_CNI_INCOMPLETS", 
+                    "Les documents CNI (recto et verso) sont obligatoires");
+            }
+            
+            if (selfieImage == null) {
+                return KYCValidationResult.rejected("SELFIE_MANQUANT", 
+                    "Le selfie est obligatoire pour la vérification biométrique");
+            }
 
-            // Validation qualité technique
-            int qualityScore = validateImageQuality(rectoImage, versoImage);
-            document.setScoreQualite(qualityScore);
+            // 4. Validation qualité des images CNI
+            int cniQualityScore = validateImageQuality(rectoImage, versoImage);
+            
+            // 5. Validation qualité du selfie
+            int selfieQualityScore = validateSelfieQuality(selfieImage);
+            
+            // Score global pondéré (CNI: 60%, Selfie: 40%)
+            int globalQualityScore = (int) (cniQualityScore * 0.6 + selfieQualityScore * 0.4);
 
-            if (qualityScore < MIN_QUALITY_SCORE) {
-                document.setStatus(DocumentStatus.REJECTED);
-                document.setRejectionReason("Qualité d'image insuffisante");
-                documentRepository.save(document);
-                
+            if (globalQualityScore < MIN_QUALITY_SCORE) {
                 return KYCValidationResult.rejected("QUALITE_IMAGE_INSUFFISANTE", 
-                    "La qualité des images est insuffisante (score: " + qualityScore + "/100)");
+                    String.format("Qualité insuffisante - Global: %d/100 (CNI: %d, Selfie: %d)", 
+                                globalQualityScore, cniQualityScore, selfieQualityScore));
             }
 
-            // 4. Détection de fraude
-            List<String> anomalies = detectFraud(document, rectoImage, versoImage);
+            // 6. Détection de fraude sur les 3 documents
+            List<String> anomalies = detectFraudWithSelfie(rectoImage, versoImage, selfieImage);
             if (!anomalies.isEmpty()) {
-                document.markAsFraudulent(anomalies);
-                documentRepository.save(document);
-                
                 return KYCValidationResult.rejected("FRAUDE_DETECTEE", 
-                    "Document suspect: " + String.join(", ", anomalies));
+                    "Documents suspects: " + String.join(", ", anomalies));
             }
 
-            // 5. Extraction données (simulation OCR)
-            extractDocumentData(document, rectoImage);
+            // 7. Validation biométrique basique
+            BiometricValidationResult biometricResult = performBasicBiometricValidation(selfieImage, rectoImage);
+            if (!biometricResult.isValid()) {
+                return KYCValidationResult.rejected("VERIFICATION_BIOMETRIQUE_ECHOUEE", 
+                    biometricResult.getReason());
+            }
 
-            // 6. Sauvegarde document validé
-            document.setStatus(DocumentStatus.APPROVED);
-            document.setValidatedAt(LocalDateTime.now());
-            document.setValidatedBy("SYSTEM_KYC");
-            documentRepository.save(document);
+            // 8. Sauvegarde des documents validés
+            saveEnhancedDocuments(idClient, cni, rectoImage, versoImage, selfieImage, globalQualityScore);
 
-            log.info("Validation KYC réussie pour client: {}", idClient);
-            return KYCValidationResult.accepted("DOCUMENTS_CONFORMES", 
-                "Documents validés avec succès");
+            log.info("Validation KYC complète avec selfie réussie pour client: {} - Score: {}", 
+                    idClient, globalQualityScore);
+            
+            return KYCValidationResult.accepted("DOCUMENTS_CONFORMES_AVEC_SELFIE", 
+                String.format("Documents et selfie validés avec succès (Score: %d/100)", globalQualityScore));
 
         } catch (Exception e) {
-            log.error("Erreur lors de la validation KYC: {}", e.getMessage(), e);
+            log.error("Erreur lors de la validation KYC avec selfie: {}", e.getMessage(), e);
             return KYCValidationResult.rejected("ERREUR_TECHNIQUE", 
-                "Erreur technique lors de la validation");
+                "Erreur technique lors de la validation complète");
         }
+    }
+
+    /**
+     * Validation spécifique de la qualité du selfie
+     */
+    private int validateSelfieQuality(byte[] selfieImage) {
+        int score = 100;
+
+        // Validation taille
+        if (selfieImage.length < 50000) { // 50KB min
+            score -= 40; // Plus strict pour le selfie
+            log.debug("Selfie trop petit: {}KB", selfieImage.length / 1024);
+        }
+        if (selfieImage.length > 5000000) { // 5MB max
+            score -= 20;
+            log.debug("Selfie trop volumineux: {}KB", selfieImage.length / 1024);
+        }
+
+        // Validation format
+        if (!isValidImageFormat(selfieImage)) {
+            score -= 50;
+            log.debug("Format selfie invalide");
+        }
+
+        // TODO: Ajouter validations avancées:
+        // - Détection de visage
+        // - Qualité de l'éclairage
+        // - Netteté du visage
+        // - Position du visage (centré)
+        // - Absence d'objets masquants
+
+        log.debug("Score qualité selfie: {}/100 (taille: {}KB)", score, selfieImage.length / 1024);
+        return Math.max(0, score);
+    }
+
+    /**
+     * Détection de fraude étendue aux 3 documents
+     */
+    private List<String> detectFraudWithSelfie(byte[] rectoImage, byte[] versoImage, byte[] selfieImage) {
+        List<String> anomalies = new ArrayList<>();
+
+        // Validation des CNI (réutilise la logique existante)
+        if (isCorruptedImage(rectoImage)) {
+            anomalies.add("CNI recto corrompue ou modifiée");
+        }
+        if (isCorruptedImage(versoImage)) {
+            anomalies.add("CNI verso corrompue ou modifiée");
+        }
+
+        // Validation du selfie
+        if (isCorruptedImage(selfieImage)) {
+            anomalies.add("Selfie corrompu ou modifié");
+        }
+
+        // Vérification de cohérence entre les documents
+        if (!areDocumentsConsistent(rectoImage, versoImage, selfieImage)) {
+            anomalies.add("Incohérence détectée entre les documents");
+        }
+
+        return anomalies;
+    }
+
+    /**
+     * Validation biométrique basique
+     */
+    private BiometricValidationResult performBasicBiometricValidation(byte[] selfieImage, byte[] cniImage) {
+        try {
+            // Validation basique de présence de visage
+            boolean selfieValid = isValidSelfieImage(selfieImage);
+            boolean cniValid = isValidCNIPhoto(cniImage);
+            
+            if (!selfieValid) {
+                return BiometricValidationResult.invalid("Selfie invalide ou pas de visage détecté");
+            }
+            
+            if (!cniValid) {
+                return BiometricValidationResult.invalid("Photo CNI invalide");
+            }
+
+            // TODO: Ajouter vraie comparaison biométrique
+            log.debug("Validation biométrique basique réussie");
+            return BiometricValidationResult.valid("Validation biométrique basique réussie");
+            
+        } catch (Exception e) {
+            log.error("Erreur validation biométrique: {}", e.getMessage());
+            return BiometricValidationResult.invalid("Erreur technique lors de la validation biométrique");
+        }
+    }
+
+    /**
+     * Validation basique du selfie
+     */
+    private boolean isValidSelfieImage(byte[] imageData) {
+        return imageData != null && 
+            imageData.length > 50000 && // > 50KB
+            isValidImageFormat(imageData);
+    }
+
+    /**
+     * Validation basique de la photo CNI
+     */
+    private boolean isValidCNIPhoto(byte[] imageData) {
+        return imageData != null && 
+            imageData.length > 30000 && // > 30KB
+            isValidImageFormat(imageData);
+    }
+
+    /**
+     * Vérification de cohérence entre les 3 documents
+     */
+    private boolean areDocumentsConsistent(byte[] rectoImage, byte[] versoImage, byte[] selfieImage) {
+        // Validation basique que tous les documents sont des images valides
+        return isValidImageFormat(rectoImage) && 
+            isValidImageFormat(versoImage) && 
+            isValidImageFormat(selfieImage);
+    }
+
+    /**
+     * Sauvegarde des documents avec selfie
+     */
+    private void saveEnhancedDocuments(String idClient, String cni, byte[] rectoImage, 
+                                    byte[] versoImage, byte[] selfieImage, int qualityScore) {
+        // Sauvegarde du document CNI (réutilise la logique existante)
+        DocumentKYC cniDocument = new DocumentKYC();
+        cniDocument.setIdClient(idClient);
+        cniDocument.setType(DocumentType.CNI_CAMEROUNAISE);
+        cniDocument.setNumeroDocument(cni);
+        cniDocument.setScoreQualite(qualityScore);
+        cniDocument.setStatus(DocumentStatus.APPROVED);
+        cniDocument.setValidatedAt(LocalDateTime.now());
+        cniDocument.setValidatedBy("SYSTEM_KYC_WITH_SELFIE");
+        
+        documentRepository.save(cniDocument);
+        
+        // Sauvegarde du document selfie
+        DocumentKYC selfieDocument = new DocumentKYC();
+        selfieDocument.setIdClient(idClient);
+        selfieDocument.setType(DocumentType.SELFIE_VERIFICATION);
+        selfieDocument.setNumeroDocument(cni + "_SELFIE");
+        selfieDocument.setScoreQualite(qualityScore);
+        selfieDocument.setStatus(DocumentStatus.APPROVED);
+        selfieDocument.setValidatedAt(LocalDateTime.now());
+        selfieDocument.setValidatedBy("SYSTEM_KYC_WITH_SELFIE");
+        
+        documentRepository.save(selfieDocument);
+        
+        log.info("Documents KYC avec selfie sauvegardés pour client: {}", idClient);
+    }
+
+    /**
+     * Inner class pour le résultat de validation biométrique
+     */
+    private static class BiometricValidationResult {
+        private final boolean valid;
+        private final String reason;
+        
+        private BiometricValidationResult(boolean valid, String reason) {
+            this.valid = valid;
+            this.reason = reason;
+        }
+        
+        public static BiometricValidationResult valid(String reason) {
+            return new BiometricValidationResult(true, reason);
+        }
+        
+        public static BiometricValidationResult invalid(String reason) {
+            return new BiometricValidationResult(false, reason);
+        }
+        
+        public boolean isValid() { return valid; }
+        public String getReason() { return reason; }
     }
 
     /**

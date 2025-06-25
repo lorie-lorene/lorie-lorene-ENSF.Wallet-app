@@ -51,6 +51,26 @@
             "projectName": "serviceUser",
             "args": "",
             "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "type": "java",
+            "name": "Spring Boot-ServiceAnnonceApplication<serviceAnnonce>",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "mainClass": "com.serviceAnnonce.ServiceAnnonceApplication",
+            "projectName": "serviceAnnonce",
+            "args": "",
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "type": "java",
+            "name": "Spring Boot-ServiceDemandeApplication<serviceDemande>",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "mainClass": "com.serviceDemande.ServiceDemandeApplication",
+            "projectName": "serviceDemande",
+            "args": "",
+            "envFile": "${workspaceFolder}/.env"
         }
     ]
 }

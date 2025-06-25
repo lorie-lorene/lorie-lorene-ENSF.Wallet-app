@@ -2,7 +2,6 @@ package com.serviceAgence.security;
 
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
-import io.jsonwebtoken.Claims;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
@@ -14,6 +13,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
 import java.util.stream.Collectors;
+import java.util.Base64;
 
 /**
  * Utilitaire pour la génération et validation des tokens JWT
@@ -25,15 +25,18 @@ public class JwtTokenProvider {
 
     private final SecretKey jwtSecretKey;
     private final long jwtExpirationMs;
+    
 
+    
     public JwtTokenProvider(
-            @Value("${app.jwt.secret:mySecretKeyForJWTTokenGenerationAndValidation123456789}") String jwtSecret,
-            @Value("${app.jwt.expiration-ms:86400000}") long jwtExpirationMs) {
-        
-        // Génération clé sécurisée à partir du secret
-        this.jwtSecretKey = Keys.hmacShaKeyFor(jwtSecret.getBytes());
+        @Value("${jwt.secret:mySecretKeyForJWTTokenGenerationAndValidation123456789}") String jwtSecret,
+        @Value("${jwt.expiration-ms:86400000}") long jwtExpirationMs) {
+
+        // Decode Base64 to byte[]
+        byte[] decodedKey = Base64.getDecoder().decode(jwtSecret);
+        this.jwtSecretKey = Keys.hmacShaKeyFor(decodedKey);
         this.jwtExpirationMs = jwtExpirationMs;
-        
+
         log.info("🔐 JWT Provider initialisé - Expiration: {}ms", jwtExpirationMs);
     }
 

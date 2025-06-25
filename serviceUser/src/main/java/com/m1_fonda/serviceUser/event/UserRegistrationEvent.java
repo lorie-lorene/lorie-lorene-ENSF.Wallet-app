@@ -35,4 +35,12 @@ public class UserRegistrationEvent {
     
     private String sourceService = "UserService";
     private String targetService = "AgenceService";
+
+    public String getSelfieImage() {
+        return selfieImage;
+    }
+
+    public void setSelfieImage(String selfieImage) {
+        this.selfieImage = selfieImage;
+    }
 }

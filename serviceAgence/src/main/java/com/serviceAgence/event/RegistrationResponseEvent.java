@@ -1,3 +1,4 @@
+// serviceAgence/src/main/java/com/serviceAgence/event/RegistrationResponseEvent.java
 package com.serviceAgence.event;
 
 import java.time.LocalDateTime;
@@ -17,4 +18,10 @@ public class RegistrationResponseEvent {
     private String probleme; // Code d'erreur si refus
     private Long numeroCompte; // Si accepté
     private LocalDateTime timestamp;
+    
+    /**
+     * Service de destination pour le routage des messages
+     * Par défaut: UserService pour maintenir la compatibilité
+     */
+    private String targetService = "UserService";
 }
