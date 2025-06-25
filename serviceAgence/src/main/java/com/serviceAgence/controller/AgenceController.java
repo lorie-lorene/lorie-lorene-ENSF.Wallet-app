@@ -1,6 +1,8 @@
 package com.serviceAgence.controller;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -12,9 +14,12 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import com.serviceAgence.dto.*;
+import com.serviceAgence.enums.AgenceStatus;
+import com.serviceAgence.enums.TransactionType;
 import com.serviceAgence.model.Agence;
 import com.serviceAgence.model.CompteUser;
 import com.serviceAgence.model.Transaction;
+import com.serviceAgence.repository.AgenceRepository;
 import com.serviceAgence.services.AgenceService;
 import com.serviceAgence.services.FraisService;
 import com.serviceAgence.services.KYCService;
@@ -32,6 +37,7 @@ import lombok.extern.slf4j.Slf4j;
 @RestController
 @RequestMapping("/api/v1/agence")
 @Validated
+@CrossOrigin(origins = "*", maxAge = 3600)
 @Slf4j
 @Tag(name = "Agence", description = "API de gestion des agences et comptes")
 public class AgenceController {
@@ -48,6 +54,8 @@ public class AgenceController {
     @Autowired
     private FraisService fraisService;
 
+    @Autowired
+    private AgenceRepository agenceRepository;
     /**
      * Récupération de tous les comptes d'une agence
      */
@@ -71,6 +79,219 @@ public class AgenceController {
 
         } catch (Exception e) {
             log.error("Erreur récupération comptes agence {}: {}", idAgence, e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+
+    @PostMapping("/add")
+    @Operation(summary = "Ajouter une nouvelle agence")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Agence créée avec succès"),
+            @ApiResponse(responseCode = "400", description = "Données invalides"),
+            @ApiResponse(responseCode = "403", description = "Accès non autorisé")
+    })
+    public ResponseEntity<Map<String, Object>> createAgence(@Valid @RequestBody Agence agence) {
+        Map<String, Object> response = new HashMap<>();
+        
+        try {
+            log.info("Création d'une nouvelle agence avec le code: {}", agence.getCodeAgence());
+
+            // Vérifier l'unicité du code agence
+            if (agenceRepository.existsByCodeAgence(agence.getCodeAgence())) {
+                response.put("success", false);
+                response.put("message", "Une agence avec ce code existe déjà: " + agence.getCodeAgence());
+                return ResponseEntity.badRequest().body(response);
+            }
+
+            // Initialiser les valeurs par défaut
+            if (agence.getSoldeDisponible() == null) {
+                agence.setSoldeDisponible(agence.getCapital()); // Solde initial = capital
+            }
+
+            // Configuration des frais par défaut si non fournie
+            if (agence.getTauxFrais() == null || agence.getTauxFrais().isEmpty()) {
+                Map<TransactionType, BigDecimal> defaultFrais = new HashMap<>();
+                defaultFrais.put(TransactionType.DEPOT_PHYSIQUE, new BigDecimal("0.5"));
+                defaultFrais.put(TransactionType.RETRAIT_CARTE, new BigDecimal("1.0"));
+                defaultFrais.put(TransactionType.TRANSFERT_EXTERNE, new BigDecimal("1.5"));
+                defaultFrais.put(TransactionType.TRANSFERT_VERS_CARTE, new BigDecimal("2.0"));
+                agence.setTauxFrais(defaultFrais);
+            }
+
+            // Initialiser les métadonnées si non fournies
+            if (agence.getStatus() == null) {
+                agence.setStatus(AgenceStatus.ACTIVE);
+            }
+            if (agence.getCreatedAt() == null) {
+                agence.setCreatedAt(LocalDateTime.now());
+            }
+            if (agence.getLastActivityAt() == null) {
+                agence.setLastActivityAt(LocalDateTime.now());
+            }
+            if (agence.getCreatedBy() == null) {
+                agence.setCreatedBy("system");
+            }
+
+            // Initialiser les statistiques si non fournies
+            
+            if (agence.getTotalTransactions() == null) {
+                agence.setTotalTransactions(0L);
+            }
+            if (agence.getTotalVolume() == null) {
+                agence.setTotalVolume(BigDecimal.ZERO);
+            }
+
+            // Appeler prePersist pour s'assurer que tout est initialisé
+            agence.prePersist();
+
+            // Sauvegarder l'agence
+            Agence savedAgence = agenceRepository.save(agence);
+
+            log.info("Agence créée avec succès: ID={}, Code={}", savedAgence.getIdAgence(), savedAgence.getCodeAgence());
+
+            // Créer la réponse de succès
+            response.put("success", true);
+            response.put("message", "Agence créée avec succès");
+            response.put("agence", savedAgence);
+
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+
+        } catch (org.springframework.dao.DuplicateKeyException e) {
+            log.error("Code agence déjà existant: {}", agence.getCodeAgence());
+            response.put("success", false);
+            response.put("message", "Une agence avec ce code existe déjà");
+            return ResponseEntity.badRequest().body(response);
+            
+        } catch (Exception e) {
+            log.error("Erreur lors de la création de l'agence: {}", e.getMessage(), e);
+            response.put("success", false);
+            response.put("message", "Erreur lors de la creation: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    @PostMapping("/batch")
+    public ResponseEntity<Map<String, Object>> createMultipleAgences(@RequestBody Agence[] agences) {
+        Map<String, Object> response = new HashMap<>();
+        int created = 0;
+        int failed = 0;
+        
+        try {
+            log.info("Création de {} agences en lot", agences.length);
+            
+            for (Agence agence : agences) {
+                try {
+                    // Vérifier l'unicité
+                    if (!agenceRepository.existsByCodeAgence(agence.getCodeAgence())) {
+                        
+                        // Initialiser les valeurs par défaut
+                        if (agence.getSoldeDisponible() == null && agence.getCapital() != null) {
+                            agence.setSoldeDisponible(agence.getCapital());
+                        }
+                        
+                        if (agence.getTauxFrais() == null) {
+                            Map<TransactionType, BigDecimal> defaultFrais = new HashMap<>();
+                            defaultFrais.put(TransactionType.DEPOT_PHYSIQUE, new BigDecimal("0.5"));
+                            defaultFrais.put(TransactionType.RETRAIT_CARTE, new BigDecimal("1.0"));
+                            defaultFrais.put(TransactionType.TRANSFERT_EXTERNE, new BigDecimal("1.5"));
+                            defaultFrais.put(TransactionType.TRANSFERT_VERS_CARTE, new BigDecimal("2.0"));
+                            agence.setTauxFrais(defaultFrais);
+                        }
+                        
+                        // Métadonnées par défaut
+                        if (agence.getStatus() == null) {
+                            agence.setStatus(AgenceStatus.ACTIVE);
+                        }
+                        if (agence.getCreatedAt() == null) {
+                            agence.setCreatedAt(LocalDateTime.now());
+                        }
+                        if (agence.getLastActivityAt() == null) {
+                            agence.setLastActivityAt(LocalDateTime.now());
+                        }
+                        if (agence.getCreatedBy() == null) {
+                            agence.setCreatedBy("system");
+                        }
+                        
+                        // Statistiques par défaut
+                        if (agence.getTotalComptes() == null) {
+                            agence.setTotalComptes(0L);
+                        }
+                        if (agence.getTotalTransactions() == null) {
+                            agence.setTotalTransactions(0L);
+                        }
+                        if (agence.getTotalVolume() == null) {
+                            agence.setTotalVolume(BigDecimal.ZERO);
+                        }
+                        
+                        agence.prePersist();
+                        agenceRepository.save(agence);
+                        created++;
+                        
+                    } else {
+                        log.warn("Agence {} déjà existante, ignorée", agence.getCodeAgence());
+                        failed++;
+                    }
+                } catch (Exception e) {
+                    log.error("Erreur pour l'agence {}: {}", agence.getCodeAgence(), e.getMessage());
+                    failed++;
+                }
+            }
+            
+            response.put("success", true);
+            response.put("message", String.format("%d agences créées, %d échecs", created, failed));
+            response.put("created", created);
+            response.put("failed", failed);
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            log.error("Erreur lors de la création en lot: {}", e.getMessage(), e);
+            response.put("success", false);
+            response.put("message", "Erreur lors de la création en lot: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+    /**
+    * Récupération de tous les comptes d'une agence
+    */
+    @GetMapping("/getAgences")
+    @Operation(summary = "Lister les agences")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Liste récupérée avec succès"),
+            @ApiResponse(responseCode = "404", description = "Aucune agence trouvée"),
+            @ApiResponse(responseCode = "403", description = "Accès non autorisé")
+    })
+    public ResponseEntity<List<Agence>> getAgences() {
+        try {
+            // Check database connection
+            log.info("Attempting to connect to MongoDB...");
+            
+            // Check collection exists and count documents
+            long count = agenceRepository.count();
+            log.info("Total documents in collection: {}", count);
+            
+            // Try to find all documents
+            List<Agence> agences = agenceRepository.findAll();
+            log.info("Retrieved {} agences from repository", agences.size());
+            
+            // Debug each agence
+            if (agences.isEmpty()) {
+                log.warn("No agences found in database");
+                
+                // Additional debugging - try raw MongoDB query
+                // You can inject MongoTemplate for this
+                // mongoTemplate.findAll(Document.class, "agences")
+                
+            } else {
+                agences.forEach(a -> log.info("Agence found: ID={}, Code={}, Nom={}", 
+                    a.getIdAgence(), a.getCodeAgence(), a.getNom()));
+            }
+
+            return ResponseEntity.ok(agences);
+
+        } catch (Exception e) {
+            log.error("Error retrieving agences", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }

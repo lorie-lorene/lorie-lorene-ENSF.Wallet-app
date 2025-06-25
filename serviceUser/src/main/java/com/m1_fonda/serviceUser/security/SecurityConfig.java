@@ -97,8 +97,8 @@ public class SecurityConfig {
         
         // Allow specific origins (configure based on your frontend URLs)
         configuration.setAllowedOriginPatterns(Arrays.asList(
-            "http://localhost:3000",   // React development
-            "http://localhost:8081",   // Backend development
+            "http://localhost:4000",   // React development
+            "http://localhost:8092",   // Backend development
             "https://*.your-domain.com" // Production domains
         ));
         

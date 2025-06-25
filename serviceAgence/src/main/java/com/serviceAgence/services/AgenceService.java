@@ -382,11 +382,15 @@ public class AgenceService {
                     selfieAnalysis.getSimilarityScore(), 
                     selfieAnalysis.isLivenessDetected());
 
+
+            
             // 5. Créer document avec toutes les informations (CNI + Selfie)
             DocumentKYC document = createDocumentWithSelfie(request, basicValidation, selfieAnalysis);
-            
-            documentRepository.save(document);
+            log.info("document", document);
 
+            documentRepository.save(document);
+            System.out.println("Document KYC enregistré: " + document.getIdClient());
+            
             log.info("📄 Document avec selfie créé en attente d'approbation: client={}", request.getIdClient());
 
             // 6. Retourner résultat "en attente d'approbation manuelle"

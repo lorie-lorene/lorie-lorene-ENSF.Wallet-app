@@ -25,7 +25,7 @@ import java.util.Arrays;
 /**
  * Configuration de sécurité pour AgenceService
  * - JWT Authentication
- * - CORS pour mobile app
+ * - CORS pour mobile app et extensions navigateur
  * - Protection des endpoints
  */
 @Configuration
@@ -45,11 +45,17 @@ public class SecurityConfig {
         log.info("🔧 Configuration sécurité AgenceService...");
         
         http
+            // Configuration CORS AVANT tout le reste - CRITIQUE
+            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+            
             // Désactivation CSRF (API REST)
             .csrf(csrf -> csrf.disable())
             
-            // Configuration CORS
-            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+            // Désactiver les headers de sécurité qui peuvent interférer avec CORS
+            .headers(headers -> headers
+                .frameOptions().disable()
+                .contentTypeOptions().disable()
+            )
             
             // Gestion de session : STATELESS (JWT)
             .sessionManagement(session -> 
@@ -57,9 +63,16 @@ public class SecurityConfig {
             
             // Configuration des autorisations
             .authorizeHttpRequests(authz -> authz
+                // OPTIONS requests DOIVENT être autorisées en PREMIER
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                
                 // Endpoints publics
-                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll() // 🔓 Allow preflight requests
                 .requestMatchers("/api/v1/agence/auth/**").permitAll()
+                .requestMatchers("/api/v1/agence/getAgences").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/v1/agence/add").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/v1/agence/register").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/v1/agence/contact").permitAll()
+                .requestMatchers("/api/v1/agence/public/**").permitAll()
 
                 .requestMatchers("/api/v1/agence/health").permitAll()
                 .requestMatchers("/actuator/**").permitAll()
@@ -78,7 +91,7 @@ public class SecurityConfig {
                 .anyRequest().authenticated()
             )
             
-            // Ajout du filtre JWT avant le filtre d'authentification standard
+            // Ajout du filtre JWT après la configuration CORS
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         log.info("✅ Sécurité AgenceService configurée avec succès");
@@ -86,48 +99,46 @@ public class SecurityConfig {
     }
 
     /**
-     * Configuration CORS pour mobile app
+     * Configuration CORS permissive pour développement
      */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         
-        // Origines autorisées (ajuster selon vos besoins)
-        configuration.setAllowedOriginPatterns(Arrays.asList(
-            "http://localhost:*",
-            "https://localhost:*",
-            "capacitor://localhost",
-            "ionic://localhost",
-            "http://localhost",
-            "https://your-app-domain.com"
-        ));
+        // PERMISSIF pour développement - Autorise TOUTES les origines
+        configuration.setAllowedOriginPatterns(Arrays.asList("*"));
         
-        // Méthodes HTTP autorisées
+        // Toutes les méthodes HTTP
         configuration.setAllowedMethods(Arrays.asList(
-            "GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"
+            "GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"
         ));
         
-        // En-têtes autorisés
-        configuration.setAllowedHeaders(Arrays.asList(
-            "Authorization", "Content-Type", "Accept", "Origin", 
-            "Access-Control-Request-Method", "Access-Control-Request-Headers"
-        ));
+        // Tous les en-têtes autorisés
+        configuration.setAllowedHeaders(Arrays.asList("*"));
         
-        // En-têtes exposés
+        // En-têtes exposés au client
         configuration.setExposedHeaders(Arrays.asList(
-            "Access-Control-Allow-Origin", "Access-Control-Allow-Credentials"
+            "Authorization", 
+            "Content-Type", 
+            "Accept",
+            "X-Requested-With",
+            "Access-Control-Allow-Origin", 
+            "Access-Control-Allow-Credentials",
+            "Access-Control-Allow-Headers",
+            "Access-Control-Allow-Methods"
         ));
         
-        // Autorisation des cookies/credentials
+        // IMPORTANT: Autorisation des credentials
         configuration.setAllowCredentials(true);
         
-        // Durée de cache des pré-requêtes OPTIONS
+        // Cache des pré-requêtes OPTIONS (1 heure)
         configuration.setMaxAge(3600L);
         
+        // Appliquer à TOUS les endpoints
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/api/**", configuration);
+        source.registerCorsConfiguration("/**", configuration); // Changé de "/api/**" à "/**"
         
-        log.info("🌐 CORS configuré pour mobile app");
+        log.info("🌐 CORS configuré de manière PERMISSIVE pour développement");
         return source;
     }
 
@@ -136,7 +147,7 @@ public class SecurityConfig {
      */
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder(12); // Force 12 pour sécurité renforcée
+        return new BCryptPasswordEncoder(12);
     }
 
     /**

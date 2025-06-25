@@ -29,33 +29,29 @@ public class ConfigRabbit {
         return new TopicExchange(EXCHANGE);
     }
 
-    // ==========================================
-    // FIXED BINDINGS WITH @Qualifier
-    // ==========================================
-
     @Bean
-    public Binding binding1(@Qualifier("queue_1") Queue queue, TopicExchange topicExchange) {
-        return BindingBuilder.bind(queue).to(topicExchange).with(KEY);
+    public Binding binding1( Queue queue_1, TopicExchange topicExchange) {
+        return BindingBuilder.bind(queue_1).to(topicExchange).with(KEY);
     }
 
     @Bean
-    public Binding binding2(@Qualifier("queue_2") Queue queue, TopicExchange topicExchange) {
-        return BindingBuilder.bind(queue).to(topicExchange).with(KEY2);
+    public Binding binding2( Queue queue_2, TopicExchange topicExchange) {
+        return BindingBuilder.bind(queue_2).to(topicExchange).with(KEY2);
     }
 
     @Bean
-    public Binding binding3(@Qualifier("queue_3") Queue queue, TopicExchange topicExchange) {
-        return BindingBuilder.bind(queue).to(topicExchange).with(KEY3);
+    public Binding binding3( Queue queue_3, TopicExchange topicExchange) {
+        return BindingBuilder.bind(queue_3).to(topicExchange).with(KEY3);
     }
 
     @Bean
-    public Binding binding4(@Qualifier("queue_4") Queue queue, TopicExchange topicExchange) {
-        return BindingBuilder.bind(queue).to(topicExchange).with(KEY4);
+    public Binding binding4( Queue queue_4, TopicExchange topicExchange) {
+        return BindingBuilder.bind(queue_4).to(topicExchange).with(KEY4);
     }
 
     @Bean
-    public Binding binding5(@Qualifier("queue_5") Queue queue, TopicExchange topicExchange) {
-        return BindingBuilder.bind(queue).to(topicExchange).with(KEY5);
+    public Binding binding5(Queue queue_5, TopicExchange topicExchange) {
+        return BindingBuilder.bind(queue_5).to(topicExchange).with(KEY5);
     }
 
     @Bean
@@ -68,8 +64,8 @@ public class ConfigRabbit {
         return QueueBuilder.durable(queueName).build();
     }
 
-    // Méthode utilitaire pour créer un binding dynamique
-    public static Binding createBinding(Queue queue, TopicExchange exchange, String routingKey) {
-        return BindingBuilder.bind(queue).to(exchange).with(routingKey);
-    }
+    // // Méthode utilitaire pour créer un binding dynamique
+    // public static Binding createBinding(Queue queue, TopicExchange exchange, String routingKey) {
+    //     return BindingBuilder.bind(queue).to(exchange).with(routingKey);
+    // }
 }

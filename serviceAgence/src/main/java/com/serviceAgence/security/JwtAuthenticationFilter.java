@@ -22,6 +22,7 @@ import java.util.stream.Collectors;
 /**
  * Filtre d'authentification JWT pour les requêtes entrantes
  * Valide le token et configure le contexte de sécurité
+ * Compatible CORS
  */
 @Component
 @Slf4j
@@ -34,6 +35,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, 
                                   HttpServletResponse response, 
                                   FilterChain filterChain) throws ServletException, IOException {
+        
+        // Bypass complet pour les requêtes OPTIONS (CORS preflight)
+        if ("OPTIONS".equals(request.getMethod())) {
+            filterChain.doFilter(request, response);
+            return;
+        }
         
         try {
             // Extraction du token depuis l'en-tête Authorization
@@ -60,6 +67,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     
                     log.debug("🔐 Utilisateur authentifié: {} avec rôles: {}", username, rolesString);
                 }
+            } else {
+                log.debug("🔓 Requête sans token JWT valide: {} {}", request.getMethod(), request.getRequestURI());
             }
         } catch (Exception e) {
             log.error("❌ Erreur configuration authentification: {}", e.getMessage());
@@ -84,17 +93,32 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     /**
-     * Ignore les endpoints publics
+     * Ignore les endpoints publics - SIMPLIFIÉ pour éviter les conflits CORS
      */
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
         String path = request.getRequestURI();
+        String method = request.getMethod();
         
-        // Endpoints publics qui ne nécessitent pas d'authentification
+        // TOUJOURS ignorer les requêtes OPTIONS (CORS preflight)
+        if ("OPTIONS".equals(method)) {
+            return true;
+        }
+        
+        // Endpoints publics (toutes méthodes HTTP)
         return path.startsWith("/api/v1/agence/auth/") ||
                path.startsWith("/api/v1/agence/health") ||
                path.startsWith("/actuator/") ||
                path.startsWith("/swagger-ui/") ||
-               path.startsWith("/v3/api-docs");
+               path.startsWith("/v3/api-docs") ||
+               
+               // Endpoints GET publics
+               (path.startsWith("/api/v1/agence/getAgences") && "GET".equals(method)) ||
+               
+               // Endpoints POST publics
+               (path.startsWith("/api/v1/agence/add") && "POST".equals(method)) ||
+               (path.startsWith("/api/v1/agence/register") && "POST".equals(method)) ||
+               (path.startsWith("/api/v1/agence/contact") && "POST".equals(method)) ||
+               (path.startsWith("/api/v1/agence/public/") && "POST".equals(method));
     }
 }

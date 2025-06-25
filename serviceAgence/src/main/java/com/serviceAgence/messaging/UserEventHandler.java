@@ -45,12 +45,15 @@ public class UserEventHandler {
                 return;
             }
 
+            log.info("event", event);
             // Conversion de l'événement vers DTO
             UserRegistrationRequest request = convertToRegistrationRequestWithSelfie(event);
 
+            log.info("request", request);
             // Traitement de la demande avec workflow d'approbation manuelle
             RegistrationProcessingResult result = agenceService.processRegistrationRequestWithManualApproval(request);
 
+            log.info("result", result);
             // Envoi de la réponse vers UserService
             eventPublisher.sendRegistrationResponse(event.getIdClient(), event.getIdAgence(),
                     event.getEmail(), result);

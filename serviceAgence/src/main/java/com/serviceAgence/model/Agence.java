@@ -50,11 +50,11 @@ public class Agence {
     private String telephone;
 
     // SÉCURITÉ : Credentials hashés
-    @NotBlank(message = "Login obligatoire")
-    private String login;
+    // @NotBlank(message = "Login obligatoire")
+    // private String login;
 
-    private String passwordHash;
-    private String salt;
+    // private String passwordHash;
+    // private String salt;
 
     // Informations financières
     @NotNull
