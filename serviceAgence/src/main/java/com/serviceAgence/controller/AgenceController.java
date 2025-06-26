@@ -21,6 +21,7 @@ import com.serviceAgence.model.CompteUser;
 import com.serviceAgence.model.Transaction;
 import com.serviceAgence.repository.AgenceRepository;
 import com.serviceAgence.services.AgenceService;
+import com.serviceAgence.services.CompteService;
 import com.serviceAgence.services.FraisService;
 import com.serviceAgence.services.KYCService;
 import com.serviceAgence.services.TransactionService;
@@ -56,6 +57,72 @@ public class AgenceController {
 
     @Autowired
     private AgenceRepository agenceRepository;
+    @Autowired
+    private CompteService compteService;
+
+    @PostMapping("/createAccount")
+    public ResponseEntity<AccountCreationResult> createAccount(@Valid @RequestBody AccountCreationRequest request) {
+        log.info("Requête de création de compte reçue pour client: {}, agence: {}",
+                request.getIdClient(), request.getIdAgence());
+
+        try {
+            AccountCreationResult result = compteService.createAccount(request);
+
+            if (result.isSuccess()) {
+                log.info("Compte créé avec succès: numéro={}, client={}",
+                        result.getNumeroCompte(), result.getIdClient());
+                return ResponseEntity.status(HttpStatus.CREATED).body(result);
+            } else {
+                log.warn("Échec création compte: {} - {}", result.getErrorCode(), result.getMessage());
+                return ResponseEntity.status(getHttpStatusFromErrorCode(result.getErrorCode())).body(result);
+            }
+
+        } catch (Exception e) {
+            log.error("Erreur inattendue lors de la création du compte", e);
+            AccountCreationResult errorResult = AccountCreationResult.failed(
+                    "ERREUR_INTERNE",
+                    "Une erreur inattendue s'est produite");
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResult);
+        }
+    }
+
+   
+    private HttpStatus getHttpStatusFromErrorCode(String errorCode) {
+        if (errorCode == null) {
+            return HttpStatus.INTERNAL_SERVER_ERROR;
+        }
+
+        switch (errorCode) {
+            case "COMPTE_DEJA_EXISTANT":
+                return HttpStatus.CONFLICT;
+            case "CLIENT_INEXISTANT":
+            case "AGENCE_INEXISTANTE":
+                return HttpStatus.NOT_FOUND;
+            case "DONNEES_INVALIDES":
+                return HttpStatus.BAD_REQUEST;
+            case "ERREUR_TECHNIQUE":
+            default:
+                return HttpStatus.INTERNAL_SERVER_ERROR;
+        }
+    }
+
+    /**
+     * ✅ TEST SIMPLE
+     */
+    @GetMapping("/test")
+    public ResponseEntity<Map<String, Object>> test() {
+        log.info("🔧 Test endpoint appelé");
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("status", "OK");
+        response.put("service", "AgenceService");
+        response.put("message", "Service agence fonctionnel");
+        response.put("port", 8092);
+        response.put("timestamp", LocalDateTime.now());
+
+        return ResponseEntity.ok(response);
+    }
+
     /**
      * Récupération de tous les comptes d'une agence
      */
@@ -83,7 +150,6 @@ public class AgenceController {
         }
     }
 
-
     @PostMapping("/add")
     @Operation(summary = "Ajouter une nouvelle agence")
     @ApiResponses({
@@ -93,7 +159,7 @@ public class AgenceController {
     })
     public ResponseEntity<Map<String, Object>> createAgence(@Valid @RequestBody Agence agence) {
         Map<String, Object> response = new HashMap<>();
-        
+
         try {
             log.info("Création d'une nouvelle agence avec le code: {}", agence.getCodeAgence());
 
@@ -134,7 +200,7 @@ public class AgenceController {
             }
 
             // Initialiser les statistiques si non fournies
-            
+
             if (agence.getTotalTransactions() == null) {
                 agence.setTotalTransactions(0L);
             }
@@ -148,7 +214,8 @@ public class AgenceController {
             // Sauvegarder l'agence
             Agence savedAgence = agenceRepository.save(agence);
 
-            log.info("Agence créée avec succès: ID={}, Code={}", savedAgence.getIdAgence(), savedAgence.getCodeAgence());
+            log.info("Agence créée avec succès: ID={}, Code={}", savedAgence.getIdAgence(),
+                    savedAgence.getCodeAgence());
 
             // Créer la réponse de succès
             response.put("success", true);
@@ -162,7 +229,7 @@ public class AgenceController {
             response.put("success", false);
             response.put("message", "Une agence avec ce code existe déjà");
             return ResponseEntity.badRequest().body(response);
-            
+
         } catch (Exception e) {
             log.error("Erreur lors de la création de l'agence: {}", e.getMessage(), e);
             response.put("success", false);
@@ -176,20 +243,20 @@ public class AgenceController {
         Map<String, Object> response = new HashMap<>();
         int created = 0;
         int failed = 0;
-        
+
         try {
             log.info("Création de {} agences en lot", agences.length);
-            
+
             for (Agence agence : agences) {
                 try {
                     // Vérifier l'unicité
                     if (!agenceRepository.existsByCodeAgence(agence.getCodeAgence())) {
-                        
+
                         // Initialiser les valeurs par défaut
                         if (agence.getSoldeDisponible() == null && agence.getCapital() != null) {
                             agence.setSoldeDisponible(agence.getCapital());
                         }
-                        
+
                         if (agence.getTauxFrais() == null) {
                             Map<TransactionType, BigDecimal> defaultFrais = new HashMap<>();
                             defaultFrais.put(TransactionType.DEPOT_PHYSIQUE, new BigDecimal("0.5"));
@@ -198,7 +265,7 @@ public class AgenceController {
                             defaultFrais.put(TransactionType.TRANSFERT_VERS_CARTE, new BigDecimal("2.0"));
                             agence.setTauxFrais(defaultFrais);
                         }
-                        
+
                         // Métadonnées par défaut
                         if (agence.getStatus() == null) {
                             agence.setStatus(AgenceStatus.ACTIVE);
@@ -212,7 +279,7 @@ public class AgenceController {
                         if (agence.getCreatedBy() == null) {
                             agence.setCreatedBy("system");
                         }
-                        
+
                         // Statistiques par défaut
                         if (agence.getTotalComptes() == null) {
                             agence.setTotalComptes(0L);
@@ -223,11 +290,11 @@ public class AgenceController {
                         if (agence.getTotalVolume() == null) {
                             agence.setTotalVolume(BigDecimal.ZERO);
                         }
-                        
+
                         agence.prePersist();
                         agenceRepository.save(agence);
                         created++;
-                        
+
                     } else {
                         log.warn("Agence {} déjà existante, ignorée", agence.getCodeAgence());
                         failed++;
@@ -237,14 +304,14 @@ public class AgenceController {
                     failed++;
                 }
             }
-            
+
             response.put("success", true);
             response.put("message", String.format("%d agences créées, %d échecs", created, failed));
             response.put("created", created);
             response.put("failed", failed);
-            
+
             return ResponseEntity.ok(response);
-            
+
         } catch (Exception e) {
             log.error("Erreur lors de la création en lot: {}", e.getMessage(), e);
             response.put("success", false);
@@ -252,9 +319,10 @@ public class AgenceController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
     }
+
     /**
-    * Récupération de tous les comptes d'une agence
-    */
+     * Récupération de tous les comptes d'une agence
+     */
     @GetMapping("/getAgences")
     @Operation(summary = "Lister les agences")
     @ApiResponses({
@@ -266,26 +334,26 @@ public class AgenceController {
         try {
             // Check database connection
             log.info("Attempting to connect to MongoDB...");
-            
+
             // Check collection exists and count documents
             long count = agenceRepository.count();
             log.info("Total documents in collection: {}", count);
-            
+
             // Try to find all documents
             List<Agence> agences = agenceRepository.findAll();
             log.info("Retrieved {} agences from repository", agences.size());
-            
+
             // Debug each agence
             if (agences.isEmpty()) {
                 log.warn("No agences found in database");
-                
+
                 // Additional debugging - try raw MongoDB query
                 // You can inject MongoTemplate for this
                 // mongoTemplate.findAll(Document.class, "agences")
-                
+
             } else {
-                agences.forEach(a -> log.info("Agence found: ID={}, Code={}, Nom={}", 
-                    a.getIdAgence(), a.getCodeAgence(), a.getNom()));
+                agences.forEach(a -> log.info("Agence found: ID={}, Code={}, Nom={}",
+                        a.getIdAgence(), a.getCodeAgence(), a.getNom()));
             }
 
             return ResponseEntity.ok(agences);
@@ -300,14 +368,24 @@ public class AgenceController {
      * Recherche d'un compte par numéro
      */
     @GetMapping("/comptes/{numeroCompte}")
-    @PreAuthorize("hasRole('AGENCE') or hasRole('ADMIN')")
     @Operation(summary = "Rechercher un compte par numéro")
-    public ResponseEntity<CompteUser> findAccountByNumber(
+    public ResponseEntity<Map<String, Object>> findAccountByNumber(
             @PathVariable @NotBlank String numeroCompte) {
 
         try {
             CompteUser compte = agenceService.findAccountByNumber(numeroCompte);
-            return ResponseEntity.ok(compte);
+
+            // ✅ CRÉER une réponse complète avec toutes les infos nécessaires
+            Map<String, Object> response = new HashMap<>();
+            response.put("numeroCompte", compte.getNumeroCompte());
+            response.put("idClient", compte.getIdClient());
+            response.put("idAgence", compte.getIdAgence()); // ✅ INCLURE l'ID agence
+            response.put("status", compte.getStatus().toString());
+            response.put("solde", compte.getSolde());
+            response.put("dateCreation", compte.getCreatedAt());
+            // response.put("nomPorteur", compte.getNomPorteur());
+
+            return ResponseEntity.ok(response);
 
         } catch (Exception e) {
             log.warn("Compte {} introuvable: {}", numeroCompte, e.getMessage());
@@ -354,11 +432,13 @@ public class AgenceController {
         try {
             List<Transaction> transactions = transactionService.getAccountHistory(numeroCompte, limit);
 
-            log.info("Récupération de {} transactions pour compte: {}", transactions.size(), numeroCompte);
+            log.info("Récupération de {} transactions pour compte: {}",
+                    transactions.size(), numeroCompte);
             return ResponseEntity.ok(transactions);
 
         } catch (Exception e) {
-            log.error("Erreur récupération historique {}: {}", numeroCompte, e.getMessage());
+            log.error("Erreur récupération historique {}: {}", numeroCompte,
+                    e.getMessage());
             return ResponseEntity.badRequest().build();
         }
     }
@@ -378,8 +458,25 @@ public class AgenceController {
             @Valid @RequestBody TransactionRequest request) {
 
         try {
-            log.info("Traitement transaction agence: type={}, montant={}, compte={}",
-                    request.getType(), request.getMontant(), request.getCompteSource());
+            // ✅ AJOUTER LOG DÉTAILLÉ POUR DEBUG
+            log.info("📨 Requête transaction reçue:");
+            log.info("   - Type: {}", request.getType());
+            log.info("   - Montant: {}", request.getMontant());
+            log.info("   - Compte source: {}", request.getCompteSource());
+            log.info("   - ID Client: {}", request.getIdClient());
+            log.info("   - ID Agence: {}", request.getIdAgence()); // ✅ Vérifier que ce n'est pas null
+            log.info("   - Description: {}", request.getDescription());
+
+            // Validation manuelle supplémentaire
+            if (request.getIdAgence() == null || request.getIdAgence().trim().isEmpty()) {
+                log.error("❌ ID Agence manquant dans la requête!");
+                TransactionResult errorResult = TransactionResult.failed("AGENCE_MANQUANTE",
+                        "ID Agence requis pour la transaction");
+                return ResponseEntity.badRequest().body(errorResult);
+            }
+
+            log.info("Traitement transaction agence: type={}, montant={}, compte={}, agence={}",
+                    request.getType(), request.getMontant(), request.getCompteSource(), request.getIdAgence());
 
             TransactionResult result = agenceService.processTransaction(request);
 
@@ -390,7 +487,7 @@ public class AgenceController {
             }
 
         } catch (Exception e) {
-            log.error("Erreur traitement transaction: {}", e.getMessage(), e);
+            log.error("❌ Erreur traitement transaction: {}", e.getMessage(), e);
             TransactionResult errorResult = TransactionResult.failed("ERREUR_TECHNIQUE",
                     "Erreur technique lors du traitement");
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResult);
@@ -471,7 +568,8 @@ public class AgenceController {
                     "numeroCompte", numeroCompte,
                     "reason", reason);
 
-            log.info("Compte suspendu: {} par {} - Raison: {}", numeroCompte, suspendedBy, reason);
+            log.info("Compte suspendu: {} par {} - Raison: {}", numeroCompte,
+                    suspendedBy, reason);
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
@@ -502,7 +600,8 @@ public class AgenceController {
         try {
             log.info("Validation KYC manuelle pour client: {}", idClient);
 
-            KYCValidationResult result = kycService.validateDocumentsWithSelfie(idClient, cni, rectoCni, versoCni, selfie);
+            KYCValidationResult result = kycService.validateDocumentsWithSelfie(idClient,
+                    cni, rectoCni, versoCni, selfie);
 
             if (result.isValid()) {
                 return ResponseEntity.ok(result);
@@ -519,24 +618,25 @@ public class AgenceController {
     }
 
     /**
-     * Génération du rapport KYC d'un client
-     */
+    * Génération du rapport KYC d'un client
+    */
     @GetMapping("/kyc/{idClient}/report")
     @PreAuthorize("hasRole('AGENCE') or hasRole('ADMIN')")
     @Operation(summary = "Générer le rapport KYC d'un client")
-    public ResponseEntity<String> generateKYCReport(@PathVariable @NotBlank String idClient) {
+    public ResponseEntity<String> generateKYCReport(@PathVariable @NotBlank
+    String idClient) {
 
-        try {
-            String report = kycService.generateKYCReport(idClient);
+    try {
+    String report = kycService.generateKYCReport(idClient);
 
-            return ResponseEntity.ok()
-                    .header("Content-Type", "text/plain; charset=utf-8")
-                    .body(report);
+    return ResponseEntity.ok()
+    .header("Content-Type", "text/plain; charset=utf-8")
+    .body(report);
 
-        } catch (Exception e) {
-            log.error("Erreur génération rapport KYC: {}", e.getMessage(), e);
-            return ResponseEntity.badRequest().body("Erreur lors de la génération du rapport");
-        }
+    } catch (Exception e) {
+    log.error("Erreur génération rapport KYC: {}", e.getMessage(), e);
+    return ResponseEntity.badRequest().body("Erreur lors de la génération du rapport");
+    }
     }
 
     /**
@@ -554,7 +654,8 @@ public class AgenceController {
             return ResponseEntity.ok(stats);
 
         } catch (Exception e) {
-            log.error("Erreur récupération statistiques agence {}: {}", idAgence, e.getMessage());
+            log.error("Erreur récupération statistiques agence {}: {}", idAgence,
+                    e.getMessage());
             return ResponseEntity.badRequest().build();
         }
     }
@@ -572,7 +673,8 @@ public class AgenceController {
             return ResponseEntity.ok(agence);
 
         } catch (Exception e) {
-            log.error("Erreur récupération info agence {}: {}", idAgence, e.getMessage());
+            log.error("Erreur récupération info agence {}: {}", idAgence,
+                    e.getMessage());
             return ResponseEntity.notFound().build();
         }
     }
@@ -615,19 +717,58 @@ public class AgenceController {
         }
     }
 
-    /**
-     * Vérification de la santé du service
-     */
     @GetMapping("/health")
-    @Operation(summary = "Vérifier la santé du service")
-    public ResponseEntity<Map<String, Object>> healthCheck() {
-        Map<String, Object> health = Map.of(
-                "status", "UP",
-                "service", "AgenceService",
-                "version", "2.0.0",
-                "timestamp", java.time.LocalDateTime.now());
+    @Operation(summary = "Vérifier la santé du service agence")
+    public ResponseEntity<Map<String, Object>> healthCheckAgence() {
+        Map<String, Object> health = new HashMap<>();
+
+        try {
+            // Test connectivité MongoDB
+            // long compteCount = compteService.getTotalComptes();
+            long agenceCount = agenceRepository.count();
+
+            health.put("status", "UP");
+            health.put("service", "AgenceService");
+            health.put("version", "2.0.0");
+            health.put("port", 8092);
+            health.put("timestamp", LocalDateTime.now());
+            health.put("database", "CONNECTED");
+            health.put("stats", Map.of(
+                    // "totalComptes", compteCount,
+                    "totalAgences", agenceCount));
+
+        } catch (Exception e) {
+            log.error("❌ Erreur health check agence: {}", e.getMessage());
+            health.put("status", "DOWN");
+            health.put("error", e.getMessage());
+            health.put("database", "DISCONNECTED");
+        }
 
         return ResponseEntity.ok(health);
+    }
+
+    /**
+     * ✅ INFORMATIONS SUR LES ENDPOINTS DISPONIBLES
+     */
+    @GetMapping("/endpoints")
+    @Operation(summary = "Lister les endpoints disponibles")
+    public ResponseEntity<Map<String, Object>> getAgenceEndpoints() {
+        Map<String, Object> endpoints = new HashMap<>();
+
+        endpoints.put("service", "AgenceService");
+        endpoints.put("baseUrl", "/api/v1/agence");
+        endpoints.put("port", 8092);
+        endpoints.put("endpoints", Map.of(
+                "GET /health", "Santé du service",
+                "GET /test", "Test simple",
+                "POST /createAccount", "Créer un compte",
+                "GET /getAgences", "Lister les agences",
+                "GET /comptes/{numero}", "Détails d'un compte",
+                "GET /comptes/{numero}/solde", "Solde d'un compte",
+                "POST /transactions", "Exécuter une transaction",
+                "GET /endpoints", "Cette liste"));
+
+        return ResponseEntity.ok(endpoints);
     }
 
     /**

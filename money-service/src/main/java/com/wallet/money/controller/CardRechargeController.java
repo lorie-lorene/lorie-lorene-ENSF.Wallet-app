@@ -17,12 +17,11 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -49,7 +48,7 @@ public class CardRechargeController {
 
         try {
             // Validation
-            if (request.getMontant().compareTo(new BigDecimal("500")) < 0) {
+            if (request.getMontant().compareTo(new BigDecimal("50")) < 0) {
                 return ResponseEntity.badRequest().body(createErrorResponse(request, "Montant minimum 500 FCFA"));
             }
 
@@ -77,6 +76,27 @@ public class CardRechargeController {
             response.setTimestamp(LocalDateTime.now());
 
             if ("SUCCESS".equals(freemoResponse.getStatus()) || "SUCCES".equals(freemoResponse.getStatus())) {
+
+                // ✅ NOUVEAU : Déclencher immédiatement le callback si SUCCESS
+                log.info("🚀 [IMMEDIATE-SUCCESS] FreemoPay retourné SUCCESS immédiatement - Déclenchement callback");
+
+                try {
+                    // Simuler la mise à jour comme si c'était un webhook
+                    transactionService.updateStatusFromWebhookWithCardNotification(
+                            freemoResponse.getReference(),
+                            "SUCCESS",
+                            "Recharge confirmée immédiatement");
+
+                    response.setStatus("SUCCESS");
+                    response.setMessage("Recharge confirmée et carte créditée !");
+
+                } catch (Exception callbackError) {
+                    log.error("❌ Erreur callback immédiat: {}", callbackError.getMessage());
+                    response.setStatus("PENDING");
+                    response.setMessage("Recharge en cours. Validation des callbacks...");
+                }
+
+            } else if ("PENDING".equals(freemoResponse.getStatus())) {
                 response.setStatus("PENDING");
                 response.setMessage("Recharge en cours. Validez sur votre téléphone Orange Money.");
             } else {
@@ -111,7 +131,7 @@ public class CardRechargeController {
     private Transaction createCardRechargeTransaction(CardRechargeRequest request, String clientId) {
         Transaction transaction = new Transaction();
         transaction.setClientId(clientId != null ? clientId : "unknown");
-        transaction.setExternalId("CARD_RECHARGE_" + request.getIdCarte() + "_" + System.currentTimeMillis());
+        transaction.setExternalId(request.getIdCarte() + "_" + System.currentTimeMillis());
         transaction.setPhoneNumber(request.getNumeroOrangeMoney());
         transaction.setAmount(request.getMontant());
         transaction.setType("CARD_RECHARGE");
@@ -133,164 +153,6 @@ public class CardRechargeController {
         response.setTimestamp(LocalDateTime.now());
         return response;
     }
-
-    /**
-     * Historique des transactions d'un client
-     */
-    // @GetMapping("/my-history")
-    // @PreAuthorize("hasRole('CLIENT')")
-    // public ResponseEntity<Page<TransactionDTO>> getMyTransactionHistory(
-    // @RequestParam(defaultValue = "0") int page,
-    // @RequestParam(defaultValue = "20") int size,
-    // @RequestParam(required = false) String type,
-    // @RequestParam(required = false) String status,
-    // @RequestParam(required = false) @DateTimeFormat(iso =
-    // DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
-    // @RequestParam(required = false) @DateTimeFormat(iso =
-    // DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
-    // Authentication authentication) {
-
-    // try {
-    // String clientId = extractClientId(authentication);
-
-    // log.info("📊 Récupération historique transactions - Client: {}, Page: {}/{}",
-    // clientId, page, size);
-
-    // PageRequest pageRequest = PageRequest.of(page, size,
-    // Sort.by(Sort.Direction.DESC, "createdAt"));
-
-    // Page<Transaction> transactions = transactionService.findClientTransactions(
-    // clientId, type, status, startDate, endDate, pageRequest);
-
-    // // Convertir en DTO pour masquer les infos sensibles
-    // Page<TransactionDTO> result = transactions.map(this::convertToDTO);
-
-    // return ResponseEntity.ok(result);
-
-    // } catch (Exception e) {
-    // log.error("❌ Erreur récupération historique: {}", e.getMessage(), e);
-    // return ResponseEntity.badRequest().build();
-    // }
-    // }
-
-    // /**
-    // * Détails d'une transaction spécifique
-    // */
-    // @GetMapping("/{transactionId}")
-    // @PreAuthorize("hasRole('CLIENT')")
-    // public ResponseEntity<TransactionDTO> getTransactionDetails(
-    // @PathVariable String transactionId,
-    // Authentication authentication) {
-
-    // try {
-    // String clientId = extractClientId(authentication);
-
-    // Transaction transaction = transactionService.findByExternalIdAndClientId(
-    // transactionId, clientId);
-
-    // if (transaction == null) {
-    // return ResponseEntity.notFound().build();
-    // }
-
-    // TransactionDTO dto = convertToDTO(transaction);
-    // return ResponseEntity.ok(dto);
-
-    // } catch (Exception e) {
-    // log.error("❌ Erreur récupération transaction: {}", e.getMessage(), e);
-    // return ResponseEntity.badRequest().build();
-    // }
-    // }
-
-    // /**
-    // * Statistiques des transactions du client
-    // */
-    // @GetMapping("/statistics")
-    // @PreAuthorize("hasRole('CLIENT')")
-    // public ResponseEntity<Map<String, Object>> getTransactionStatistics(
-    // @RequestParam(defaultValue = "30") int days,
-    // Authentication authentication) {
-
-    // try {
-    // String clientId = extractClientId(authentication);
-
-    // LocalDateTime startDate = LocalDateTime.now().minusDays(days);
-    // Map<String, Object> stats = transactionService.getClientStatistics(
-    // clientId, startDate);
-
-    // return ResponseEntity.ok(stats);
-
-    // } catch (Exception e) {
-    // log.error("❌ Erreur récupération statistiques: {}", e.getMessage(), e);
-    // return ResponseEntity.badRequest().build();
-    // }
-    // }
-
-    // /**
-    // * Historique spécifique des recharges de cartes
-    // */
-    // @GetMapping("/card-recharges")
-    // @PreAuthorize("hasRole('CLIENT')")
-    // public ResponseEntity<List<CardRechargeHistoryDTO>> getCardRechargeHistory(
-    // @RequestParam(required = false) String idCarte,
-    // @RequestParam(defaultValue = "50") int limit,
-    // Authentication authentication) {
-
-    // try {
-    // String clientId = extractClientId(authentication);
-
-    // List<Transaction> recharges = transactionService.findCardRecharges(
-    // clientId, idCarte, limit);
-
-    // List<CardRechargeHistoryDTO> result = recharges.stream()
-    // .map(this::convertToCardRechargeDTO)
-    // .toList();
-
-    // return ResponseEntity.ok(result);
-
-    // } catch (Exception e) {
-    // log.error("❌ Erreur récupération historique recharges: {}", e.getMessage(),
-    // e);
-    // return ResponseEntity.badRequest().build();
-    // }
-    // }
-
-    // /**
-    // * Recherche de transactions
-    // */
-    // @GetMapping("/search")
-    // @PreAuthorize("hasRole('CLIENT')")
-    // public ResponseEntity<List<TransactionDTO>> searchTransactions(
-    // @RequestParam String query,
-    // @RequestParam(defaultValue = "20") int limit,
-    // Authentication authentication) {
-
-    // try {
-    // String clientId = extractClientId(authentication);
-
-    // List<Transaction> transactions = transactionService.searchClientTransactions(
-    // clientId, query, limit);
-
-    // List<TransactionDTO> result = transactions.stream()
-    // .map(this::convertToDTO)
-    // .toList();
-
-    // return ResponseEntity.ok(result);
-
-    // } catch (Exception e) {
-    // log.error("❌ Erreur recherche transactions: {}", e.getMessage(), e);
-    // return ResponseEntity.badRequest().build();
-    // }
-    // }
-    // private String extractClientId(Authentication authentication) {
-    // if (authentication.getPrincipal() instanceof
-    // org.springframework.security.core.userdetails.UserDetails) {
-    // org.springframework.security.core.userdetails.UserDetails userDetails =
-    // (org.springframework.security.core.userdetails.UserDetails)
-    // authentication.getPrincipal();
-    // return userDetails.getUsername();
-    // }
-    // throw new SecurityException("Client non authentifié");
-    // }
 
     private TransactionDTO convertToDTO(Transaction transaction) {
         TransactionDTO dto = new TransactionDTO();
@@ -525,6 +387,43 @@ public class CardRechargeController {
         public void setNumeroOrangeMoneyMasked(String numeroOrangeMoneyMasked) {
             this.numeroOrangeMoneyMasked = numeroOrangeMoneyMasked;
         }
+    }
+
+    @GetMapping("/test")
+    public ResponseEntity<Map<String, Object>> test() {
+        log.info("🔧 Test endpoint appelé");
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("status", "OK");
+        response.put("service", "moneyservice");
+        response.put("message", "Service moneyservice fonctionnel");
+        response.put("port", 8095);
+        response.put("timestamp", LocalDateTime.now());
+
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/health")
+    public ResponseEntity<Map<String, Object>> healthCheckAgence() {
+        Map<String, Object> health = new HashMap<>();
+
+        try {
+
+            health.put("status", "UP");
+            health.put("service", "moneyservice");
+            health.put("version", "2.0.0");
+            health.put("port", 8095);
+            health.put("timestamp", LocalDateTime.now());
+            health.put("database", "CONNECTED");
+
+        } catch (Exception e) {
+            log.error("❌ Erreur health check agence: {}", e.getMessage());
+            health.put("status", "DOWN");
+            health.put("error", e.getMessage());
+            health.put("database", "DISCONNECTED");
+        }
+
+        return ResponseEntity.ok(health);
     }
 
 }

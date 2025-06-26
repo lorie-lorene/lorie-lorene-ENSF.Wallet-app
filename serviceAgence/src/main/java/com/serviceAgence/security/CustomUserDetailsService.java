@@ -26,7 +26,7 @@ public class CustomUserDetailsService implements UserDetailsService {
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         log.debug("🔍 Chargement utilisateur: {}", username);
-        
+
         AgenceUser user = userRepository.findByUsername(username)
                 .orElseThrow(() -> {
                     log.error("❌ Utilisateur introuvable: {}", username);

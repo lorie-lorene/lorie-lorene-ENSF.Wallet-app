@@ -24,56 +24,84 @@ import java.util.Arrays;
 @EnableMethodSecurity(prePostEnabled = true)
 public class SecurityConfig {
 
-    @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        http
-                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .csrf(csrf -> csrf.disable())
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(authz -> authz
-                        .requestMatchers("/api/v1/cartes/health", "/api/v1/cartes/config/**").permitAll()
-                        .requestMatchers("/api/v1/cartes/admin/**").hasRole("ADMIN")
-                        .requestMatchers("/api/v1/cartes/**").hasAnyRole("CLIENT", "ADMIN")
-                        .anyRequest().authenticated())
-                .httpBasic(); // AJOUTÉ : Authentification HTTP Basic
+        @Bean
+        public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+                http
+                                .csrf(csrf -> csrf.disable()) // Disable CSRF for API
+                                .authorizeHttpRequests(auth -> auth
+                                                .requestMatchers("/api/v*/admin/**").permitAll() // Allow admin
+                                                // endpoints
+                                                // temporarily
+                                                .requestMatchers("/api/v1/cartes/admin/all").permitAll() // Public
+                                                .requestMatchers("/api/v1/cartes//admin/{idCarte}/admin-block")
+                                                .permitAll()
+                                                .requestMatchers(
+                                                                new org.springframework.security.web.util.matcher.AntPathRequestMatcher(
+                                                                                "/api/v1/cartes/{idCarte}/recharge-orange-money",
+                                                                                "POST"))
+                                                .permitAll()
+                                                .requestMatchers(
+                                                                new org.springframework.security.web.util.matcher.AntPathRequestMatcher(
+                                                                                "/api/v1/cartes/webhooks/money-callback",
+                                                                                "POST"))
+                                                .permitAll()
 
-        return http.build();
-    }
+                                                .requestMatchers("/actuator/health").permitAll() // Health check
+                                                .anyRequest().authenticated())
+                                .sessionManagement(session -> session
+                                                .sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
-    // NOUVEAU : Utilisateurs de test
-    @Bean
-    public UserDetailsService userDetailsService() {
-        UserDetails client = User.builder()
-                .username("client")
-                .password(passwordEncoder().encode("password"))
-                .roles("CLIENT")
-                .build();
+                return http.build();
+        }
 
-        UserDetails admin = User.builder()
-                .username("admin")
-                .password(passwordEncoder().encode("admin"))
-                .roles("ADMIN")
-                .build();
+        // NOUVEAU : Utilisateurs de test
+        @Bean
+        public UserDetailsService userDetailsService() {
+                UserDetails client = User.builder()
+                                .username("client")
+                                .password(passwordEncoder().encode("password"))
+                                .roles("CLIENT")
+                                .build();
 
-        return new InMemoryUserDetailsManager(client, admin);
-    }
+                UserDetails admin = User.builder()
+                                .username("admin")
+                                .password(passwordEncoder().encode("admin"))
+                                .roles("ADMIN")
+                                .build();
 
-    // NOUVEAU : Encodeur de mots de passe
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
+                return new InMemoryUserDetailsManager(client, admin);
+        }
 
-    @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(Arrays.asList("*"));
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(Arrays.asList("*"));
-        configuration.setAllowCredentials(true);
+        // NOUVEAU : Encodeur de mots de passe
+        @Bean
+        public PasswordEncoder passwordEncoder() {
+                return new BCryptPasswordEncoder();
+        }
 
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/api/**", configuration);
-        return source;
-    }
+        @Bean
+        public CorsConfigurationSource corsConfigurationSource() {
+                CorsConfiguration configuration = new CorsConfiguration();
+                configuration.setAllowedOriginPatterns(Arrays.asList("*"));
+                configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE",
+                                "OPTIONS"));
+                configuration.setAllowedHeaders(Arrays.asList("*"));
+                configuration.setAllowCredentials(true);
+
+                UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+                source.registerCorsConfiguration("/api/**", configuration);
+                return source;
+        }
+
+        @Bean
+        public SecurityFilterChain testSecurityFilterChain(HttpSecurity http) throws Exception {
+                http
+                                .csrf(csrf -> csrf.disable())
+                                .sessionManagement(session -> session
+                                                .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                                .authorizeHttpRequests(auth -> auth
+                                                .anyRequest().permitAll() // Permet tous les accès sans authentification
+                                );
+
+                return http.build();
+        }
 }

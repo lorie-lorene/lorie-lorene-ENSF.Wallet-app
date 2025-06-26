@@ -56,7 +56,7 @@ public class ConfigQueue {
     }
 
     // suppresion du client en cas d'echec de creation du compte
-    @Bean
+        @Bean
     public Queue queue_r_request() {
         return new Queue("Response-Demande-Client-Queue");
     }
