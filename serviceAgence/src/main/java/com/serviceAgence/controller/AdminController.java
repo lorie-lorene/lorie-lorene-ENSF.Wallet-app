@@ -27,7 +27,7 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/v1/agence/admin/users")
-@PreAuthorize("hasRole('ADMIN')") // Toutes les méthodes nécessitent le rôle ADMIN
+@PreAuthorize("hasRole('ADMIN')")
 @Validated
 @Slf4j
 @Tag(name = "Admin User Management", description = "Gestion des utilisateurs par l'administrateur")
