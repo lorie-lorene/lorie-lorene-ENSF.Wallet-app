@@ -42,16 +42,21 @@ public class AuthenticationService {
         log.info("Authentication attempt for identifier: {}", loginRequest.getIdentifier());
 
         try {
+            log.info("Login request details: {}", loginRequest);
             // Find user by email or phone number
             Optional<Client> clientOpt = findUserByIdentifier(loginRequest.getIdentifier());
-            
+
+            log.info("User found: {}", clientOpt.get().getNom());
+            log.info("isEmpty?: {}", clientOpt.isEmpty());
+
             if (clientOpt.isEmpty()) {
+                log.info("No user found with identifier: {}", loginRequest.getIdentifier());
                 recordFailedLoginAttempt(loginRequest.getIdentifier());
                 throw new BusinessValidationException("Invalid credentials");
             }
 
             Client client = clientOpt.get();
-
+            log.info("client found: {}", client.getNom());
             // Check if account is locked
             if (isAccountLocked(client)) {
                 throw new BusinessValidationException(
@@ -60,13 +65,11 @@ public class AuthenticationService {
             }
 
             // Verify password
-            if (!passwordEncoder.matches(loginRequest.getPassword(), client.getPasswordHash())) {
+            if (!passwordEncoder.matches(loginRequest.getPassword() + client.getSalt(), client.getPasswordHash())) {
+                log.info("Invalid password for user: {}", client.getEmail());
                 recordFailedLoginAttempt(client);
                 throw new BusinessValidationException("Invalid credentials");
             }
-
-            // Check account status
-            validateAccountStatus(client);
 
             // Successful authentication
             recordSuccessfulLogin(client);
@@ -179,10 +182,12 @@ public class AuthenticationService {
      * Find user by email or phone number
      */
     private Optional<Client> findUserByIdentifier(String identifier) {
-        if (identifier.contains("@")) {
-            return userRepository.findActiveClientByEmail(identifier);
-        } else if (identifier.matches("^6[5-9]\\d{7}$")) {
-            return userRepository.findActiveClientByNumero(identifier);
+        if( identifier.contains("@")) {
+            // Identifier is an email
+            return userRepository.findByEmail(identifier);
+        } else if( identifier.matches("\\d{10,15}")) {
+            // Identifier is a phone number
+            return userRepository.findByNumero(identifier);
         }
         return Optional.empty();
     }

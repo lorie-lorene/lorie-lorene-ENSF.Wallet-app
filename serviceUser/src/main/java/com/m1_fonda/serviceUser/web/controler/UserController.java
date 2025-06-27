@@ -295,6 +295,7 @@ public class UserController {
 
             if (client.isPresent()) {
                 ClientProfileResponse profile = mapToProfileResponse(client.get());
+                log.info("profile : {}", profile);
                 return ResponseEntity.ok(profile);
             } else {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
