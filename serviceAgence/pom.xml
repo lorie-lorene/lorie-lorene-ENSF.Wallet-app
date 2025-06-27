@@ -5,7 +5,7 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>3.3.4</version>
+		<version>3.5.3</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.m1-fonda</groupId>
@@ -28,7 +28,7 @@
 	</scm>
 	<properties>
 		<java.version>17</java.version>
-		<spring-cloud.version>2023.0.3</spring-cloud.version>
+		<spring-cloud.version>2025.0.0</spring-cloud.version>
 	</properties>
 	<dependencies>
 		<!-- ✅ CORE SPRING BOOT -->
@@ -65,7 +65,7 @@
 		</dependency>
 
 		<!-- ✅ JSON PROCESSING -->
-		<dependency>
+		<dependency>//sz
 			<groupId>com.fasterxml.jackson.core</groupId>
 			<artifactId>jackson-databind</artifactId>
 		</dependency>
@@ -91,12 +91,7 @@
 			<optional>true</optional>
 		</dependency>
 
-		<!-- ✅ DATABASE - H2 pour les tests -->
-		<dependency>
-			<groupId>com.h2database</groupId>
-			<artifactId>h2</artifactId>
-			<scope>runtime</scope>
-		</dependency>
+	
 
 		<!-- ✅ TESTING -->
 		<dependency>
@@ -197,14 +192,7 @@
 	<!-- ✅ DEPENDENCY MANAGEMENT -->
 	<dependencyManagement>
 		<dependencies>
-			<!-- TestContainers BOM -->
-			<dependency>
-				<groupId>org.testcontainers</groupId>
-				<artifactId>testcontainers-bom</artifactId>
-				<version>${testcontainers.version}</version>
-				<type>pom</type>
-				<scope>import</scope>
-			</dependency>
+		
 			
 			<!-- Spring Cloud BOM - Activez seulement si vous utilisez Spring Cloud -->
 			

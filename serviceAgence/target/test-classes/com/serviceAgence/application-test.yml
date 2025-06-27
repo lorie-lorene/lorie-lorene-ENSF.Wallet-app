@@ -1,0 +1,45 @@
+# Créez src/test/resources/application-test.yml
+
+spring:
+  # Désactiver Spring Cloud Config
+  cloud:
+    config:
+      enabled: false
+  config:
+    import: ""
+    
+  # Configuration de base de données pour les tests
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: password
+    
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    
+  # Configuration RabbitMQ pour les tests
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+    listener:
+      simple:
+        auto-startup: false
+        
+  # Désactiver les auto-configurations problématiques
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
+      - org.springframework.cloud.config.client.ConfigServiceBootstrapConfiguration
+
+# Logging pour les tests
+logging:
+  level:
+    com.serviceAgence: DEBUG
+    org.springframework.amqp: ERROR
+    org.springframework.cloud: ERROR
+    org.springframework.boot.autoconfigure: ERROR
