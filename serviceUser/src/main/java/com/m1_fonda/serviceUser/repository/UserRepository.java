@@ -53,6 +53,12 @@ public interface UserRepository extends MongoRepository<Client, String> {
     @Query("{'email': {$regex: ?0, $options: 'i'}, 'status': 'ACTIVE'}")
     Optional<Client> findActiveClientByEmail(String email);
 
+    /**
+     * Find client by email or phone number (case insensitive)
+     */
+    @Query("{$or: [{'email': {$regex: ?0, $options: 'i'}}, {'numero': ?0}]}")
+    Optional<Client> findByEmailOrNumero(String emailOrNumero);
+
     // =====================================
     // EXISTENCE CHECK METHODS
     // =====================================
