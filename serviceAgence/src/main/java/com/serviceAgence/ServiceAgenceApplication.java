@@ -5,9 +5,9 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 
-//import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
+import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 
-// @EnableDiscoveryClient
+@EnableDiscoveryClient
 @SpringBootApplication
 
 public class ServiceAgenceApplication {

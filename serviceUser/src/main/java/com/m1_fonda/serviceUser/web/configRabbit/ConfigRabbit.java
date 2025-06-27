@@ -13,6 +13,7 @@ public class ConfigRabbit {
     public static final String EXCHANGE = "Client-exchange";
     /* cle pour l'envoie d'une demande */
     public static final String kEY = "demande.send";
+    public static final String kEY6 = "demande.send2";
     /* cle pour l'envoie d'un depot */
     public static final String kEY2 = "depot.send";
     /* cle pour lenvoie d'un retrait */
@@ -58,6 +59,11 @@ public class ConfigRabbit {
     @Bean
     public Binding binding5(Queue queue_5, TopicExchange EXCHANGE) {
         return BindingBuilder.bind(queue_5).to(EXCHANGE).with(kEY5);
+    }
+
+    @Bean
+    public Binding binding6(Queue queue_6, TopicExchange EXCHANGE) {
+        return BindingBuilder.bind(queue_6).to(EXCHANGE).with(kEY6);
     }
 
     @Bean

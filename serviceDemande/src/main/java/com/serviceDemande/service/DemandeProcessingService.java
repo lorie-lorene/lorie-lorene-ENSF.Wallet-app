@@ -41,12 +41,12 @@ public class DemandeProcessingService {
     private RabbitTemplate rabbitTemplate;
 
     @Autowired
-    private NotificationService notificationService;
+    private NotificationService notificationService; 
 
     /**
      * Réception et traitement des demandes de validation depuis ServiceAgence
      */
-    @RabbitListener(queues = "Demande-Queue")
+    @RabbitListener(queues = "Demande-Queue2")
     public void processValidationRequest(ValidationRequest request) {
         log.info("🔍 Réception demande validation: client={}, agence={}",
                 request.getIdClient(), request.getIdAgence());

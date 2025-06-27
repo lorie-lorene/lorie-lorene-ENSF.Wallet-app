@@ -586,7 +586,7 @@ public class CarteController {
      * raabitmq
      */
     @PostMapping("/{idCarte}/withdraw-to-mobile-money")
-    // @PreAuthorize("hasRole('CLIENT')")
+    @PreAuthorize("hasRole('CLIENT')")
     @Operation(summary = "Retirer de l'argent d'une carte vers Orange/MTN Money")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Retrait initié avec succès"),
@@ -603,8 +603,8 @@ public class CarteController {
             log.info("💸 [WITHDRAWAL] Demande retrait - Carte: {}, Montant: {}, Provider: {}",
                     idCarte, request.getMontant(), request.getProvider());
 
-            // String clientId = authentication.getName();
-            String clientId = "1";
+            String clientId = authentication.getName();
+            // String clientId = "1";
 
             // 1. Vérifier que la carte appartient au client et est active
             Carte carte = carteService.findById(idCarte);
@@ -669,7 +669,7 @@ public class CarteController {
      * Historique des retraits d'une carte
      */
     @GetMapping("/{idCarte}/withdrawal-history")
-    @PreAuthorize("hasRole('CLIENT')")
+    // @PreAuthorize("hasRole('CLIENT')")
     @Operation(summary = "Historique des retraits d'une carte")
     public ResponseEntity<List<Carte.CarteAction>> getCardWithdrawalHistory(
             @PathVariable @NotBlank String idCarte,
@@ -677,7 +677,8 @@ public class CarteController {
             Authentication authentication) {
 
         try {
-            String clientId = extractClientId(authentication);
+            // String clientId = extractClientId(authentication);
+            String clientId = "1";
             Carte carte = carteService.getCardDetails(idCarte, clientId);
 
             List<Carte.CarteAction> withdrawals = carte.getActionsHistory()

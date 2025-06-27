@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Configuration;
 public class ConfigQueue {
 
     public static final String QUEUE_Entrant = "Demande-Queue";
+    public static final String QUEUE_Entrant6 = "Demande-Queue2";
 
     public static final String QUEUE_Entrant2 = "Demande-Depot-Queue";
 
@@ -47,6 +48,10 @@ public class ConfigQueue {
         return new Queue(QUEUE_Entrant5);
     }
 
+    @Bean
+    public Queue queue_6() {
+        return new Queue(QUEUE_Entrant6);
+    }
     /* queues de reception en cas d'absence de celles ci */
 
     // reception du nouveau mot de passe
@@ -56,7 +61,7 @@ public class ConfigQueue {
     }
 
     // suppresion du client en cas d'echec de creation du compte
-        @Bean
+    @Bean
     public Queue queue_r_request() {
         return new Queue("Response-Demande-Client-Queue");
     }

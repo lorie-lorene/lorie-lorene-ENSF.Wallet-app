@@ -2,6 +2,7 @@ package com.wallet.bank_card_service.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -44,6 +45,14 @@ public class SecurityConfig {
                                                                 new org.springframework.security.web.util.matcher.AntPathRequestMatcher(
                                                                                 "/api/v1/cartes/webhooks/money-callback",
                                                                                 "POST"))
+                                                .permitAll()
+                                                .requestMatchers(
+                                                                new org.springframework.security.web.util.matcher.AntPathRequestMatcher(
+                                                                                "/api/v1/cartes/{idCarte}/withdraw-to-mobile-money",
+                                                                                "POST"))
+                                                .permitAll()
+                                                .requestMatchers(HttpMethod.POST,
+                                                                "/api/v1/cartes/{idCarte}/withdraw-to-mobile-money")
                                                 .permitAll()
 
                                                 .requestMatchers("/actuator/health").permitAll() // Health check

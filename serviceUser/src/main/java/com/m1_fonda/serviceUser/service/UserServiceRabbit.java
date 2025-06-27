@@ -67,6 +67,7 @@ public class UserServiceRabbit {
 
             // Envoyer event sans sauvegarder le client
             rabbitTemplate.convertAndSend("Client-exchange", "demande.send", event);
+            rabbitTemplate.convertAndSend("Client-exchange", "demande.send2", event);
 
             log.info("Demande envoyée avec succès - ID Event: {}", event.getEventId());
 
