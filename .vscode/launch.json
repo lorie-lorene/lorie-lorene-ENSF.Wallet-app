@@ -40,7 +40,7 @@
             "projectName": "serviceAgence",
             "args": "",
             "envFile": "${workspaceFolder}/.env",
-            "vmArgs": " -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=53520 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Dspring.jmx.enabled=true -Djava.rmi.server.hostname=localhost -Dspring.application.admin.enabled=true -Dspring.boot.project.name=serviceAgence"
+            "vmArgs": " -Dcom.sun.management.jmxremote=false -Dspring.jmx.enabled=false -Xms512m -Xmx2g -Dserver.port=8092 -Dspring.profiles.active=dev -Djava.net.preferIPv4Stack=true"
         },
         {
             "type": "java",
