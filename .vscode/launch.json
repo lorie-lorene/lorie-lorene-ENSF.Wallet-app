@@ -71,6 +71,26 @@
             "projectName": "serviceDemande",
             "args": "",
             "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "type": "java",
+            "name": "Spring Boot-BankCardServiceApplication<bank-card-service>",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "mainClass": "com.wallet.bank_card_service.BankCardServiceApplication",
+            "projectName": "bank-card-service",
+            "args": "",
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "type": "java",
+            "name": "Spring Boot-MoneyServiceApplication<money-service>",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "mainClass": "com.wallet.money.MoneyServiceApplication",
+            "projectName": "money-service",
+            "args": "",
+            "envFile": "${workspaceFolder}/.env"
         }
     ]
 }

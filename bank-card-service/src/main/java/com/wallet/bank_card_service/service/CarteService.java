@@ -12,6 +12,7 @@ import java.util.UUID;
 
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.pulsar.PulsarProperties.Transaction;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -20,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.wallet.bank_card_service.dto.CarteCreationRequest;
 import com.wallet.bank_card_service.dto.CarteCreationResult;
 import com.wallet.bank_card_service.repository.CarteRepository;
+import com.wallet.bank_card_service.service.AgenceServiceClient.CompteDetails;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -57,7 +59,6 @@ public class CarteService {
 
     @Autowired
     private TransactionService transactionService;
-
     @Autowired
     private PasswordEncoder passwordEncoder;
 
@@ -70,7 +71,8 @@ public class CarteService {
      * Création d'une nouvelle carte bancaire
      */
     public CarteCreationResult createCarte(CarteCreationRequest request) {
-        log.info("🆕 Création carte: client={}, type={}", request.getIdClient(), request.getType());
+        log.info("🆕 Création carte: client={}, agence={}, type={}",
+                request.getIdClient(), request.getIdAgence(), request.getType());
 
         try {
             // 1. Validations préliminaires
@@ -79,11 +81,16 @@ public class CarteService {
             // 2. Vérifier limites du client (1 gratuite max)
             validateClientCardLimits(request.getIdClient(), request.getType());
 
-            // 3. Vérifier et débiter les frais de création si nécessaire
+            // 3. CALCULER ET DÉBITER LES FRAIS (si nécessaire)
             BigDecimal fraisCreation = request.getType().getFraisCreation();
             if (fraisCreation.compareTo(BigDecimal.ZERO) > 0) {
+
+                // ✅ UTILISER L'AGENCE DIRECTEMENT depuis la request
                 boolean fraisDebites = agenceServiceClient.debitAccountFees(
-                        request.getNumeroCompte(), fraisCreation, "FRAIS_CREATION_CARTE_" + request.getType());
+                        request.getNumeroCompte(),
+                        fraisCreation,
+                        "FRAIS_CREATION_CARTE_" + request.getType(),
+                        request.getIdAgence()); // ✅ Directement depuis request
 
                 if (!fraisDebites) {
                     return CarteCreationResult.failed("SOLDE_INSUFFISANT",
@@ -137,7 +144,7 @@ public class CarteService {
             // 3. Vérifier solde et débiter le compte
             boolean debitOk = agenceServiceClient.debitAccount(
                     request.getNumeroCompteSource(), montantTotal,
-                    "TRANSFERT_VERS_CARTE_" + carte.getMaskedNumber());
+                    "TRANSFERT_VERS_CARTE_" + carte.getMaskedNumber(), request.getIdAgence());
 
             if (!debitOk) {
                 return TransfertCarteResult.failed("SOLDE_INSUFFISANT",
@@ -600,22 +607,33 @@ public class CarteService {
     // ========================================
 
     private void validateCreationRequest(CarteCreationRequest request) {
-        // Vérifier que le compte existe et appartient au client
-        boolean accountExists = agenceServiceClient.verifyAccountOwnership(
-                request.getNumeroCompte(), request.getIdClient());
+        // 1. Récupérer les détails complets du compte
+        Map<String, Object> compteDetails = agenceServiceClient.getAccountDetailsMap(request.getNumeroCompte());
 
-        if (!accountExists) {
-            throw new CarteException("COMPTE_INTROUVABLE",
-                    "Compte bancaire introuvable ou n'appartient pas au client");
+        // 2. Vérifier que le compte appartient au client
+        String clientIdFromAccount = (String) compteDetails.get("idClient");
+        if (!request.getIdClient().equals(clientIdFromAccount)) {
+            throw new CarteException("COMPTE_NON_AUTORISE",
+                    "Le compte n'appartient pas au client spécifié");
         }
 
-        // Vérifier que le compte est actif
-        boolean accountActive = agenceServiceClient.isAccountActive(request.getNumeroCompte());
+        // 3. Vérifier que le compte appartient à l'agence
+        String agenceIdFromAccount = (String) compteDetails.get("idAgence");
+        if (!request.getIdAgence().equals(agenceIdFromAccount)) {
+            throw new CarteException("COMPTE_AGENCE_MISMATCH",
+                    "Le compte n'appartient pas à l'agence spécifiée. " +
+                            "Compte agence: " + agenceIdFromAccount + ", Demandé: " + request.getIdAgence());
+        }
 
-        if (!accountActive) {
+        // 4. Vérifier que le compte est actif
+        String status = (String) compteDetails.get("status");
+        if (!"ACTIVE".equals(status)) {
             throw new CarteException("COMPTE_INACTIF",
-                    "Le compte bancaire n'est pas actif");
+                    "Le compte bancaire n'est pas actif (statut: " + status + ")");
         }
+
+        log.info("✅ Validation compte réussie: compte={}, client={}, agence={}",
+                request.getNumeroCompte(), request.getIdClient(), request.getIdAgence());
     }
 
     private void validateClientCardLimits(String clientId, CarteType type) {
@@ -916,6 +934,7 @@ public class CarteService {
         carte.setCreatedAt(LocalDateTime.now());
         carte.setActivatedAt(LocalDateTime.now());
         carte.setCreatedBy(request.getIdClient());
+        carte.setIdAgence(request.getIdAgence());
 
         // Configuration des limites
         BigDecimal dailyPurchase = request.getLimiteDailyPurchase() != null ? request.getLimiteDailyPurchase()
@@ -1022,7 +1041,7 @@ public class CarteService {
 
                 if (fraisMensuels.compareTo(BigDecimal.ZERO) > 0) {
                     boolean fraisDebites = agenceServiceClient.debitAccountFees(
-                            carte.getNumeroCompte(), fraisMensuels,
+                            carte.getNumeroCompte(), fraisMensuels, carte.getIdAgence(),
                             "FRAIS_MENSUEL_CARTE_" + carte.getType());
 
                     if (fraisDebites) {
@@ -1051,6 +1070,97 @@ public class CarteService {
         }
 
         log.info("✅ Traitement frais mensuels terminé: {} cartes traitées", cartesForBilling.size());
+    }
+
+    public void crediterCarte(String idCarte, BigDecimal montant, String requestId) {
+        try {
+            log.info("💳 [CREDIT] Crédit carte - ID: {}, Montant: {}, RequestId: {}",
+                    idCarte, montant, requestId);
+            Carte carte = findById(idCarte);
+            if (carte == null) {
+                log.error("❌ [CREDIT] Carte non trouvée: {}", idCarte);
+                throw new RuntimeException("Carte non trouvée: " + idCarte);
+            }
+
+            // Calculer nouveau solde
+            BigDecimal nouveauSolde = carte.getSolde().add(montant);
+            carte.setSolde(nouveauSolde);
+            carte.setActivatedAt(LocalDateTime.now());
+
+            // Sauvegarder
+            carteRepository.save(carte);
+
+            // Enregistrer la transaction dans l'historique
+            enregistrerTransactionRecharge(carte, montant, requestId);
+
+            log.info("✅ [CREDIT] Carte créditée - Nouveau solde: {} FCFA", nouveauSolde);
+        } catch (Exception e) {
+            log.error("❌ [CREDIT] Erreur crédit carte: {}", e.getMessage(), e);
+            throw new RuntimeException("Erreur lors du crédit de la carte", e);
+        }
+    }
+
+    public void rembourserCarte(String idCarte, BigDecimal montant, String requestId) {
+        try {
+            log.info("💰 [REFUND] Remboursement carte - ID: {}, Montant: {}, RequestId: {}",
+                    idCarte, montant, requestId);
+            Carte carte = findById(idCarte);
+            if (carte == null) {
+                log.error("❌ [REFUND] Carte non trouvée: {}", idCarte);
+                throw new RuntimeException("Carte non trouvée: " + idCarte);
+            }
+
+            // Rembourser = créditer le montant
+            BigDecimal nouveauSolde = carte.getSolde().add(montant);
+            carte.setSolde(nouveauSolde);
+            carte.setActivatedAt(LocalDateTime.now());
+
+            carteRepository.save(carte);
+
+            // Enregistrer dans l'historique
+            enregistrerTransactionRemboursement(carte, montant, requestId);
+
+            log.info("✅ [REFUND] Carte remboursée - Nouveau solde: {} FCFA", nouveauSolde);
+        } catch (Exception e) {
+            log.error("❌ [REFUND] Erreur remboursement: {}", e.getMessage(), e);
+            throw new RuntimeException("Erreur lors du remboursement", e);
+        }
+    }
+
+    private void enregistrerTransactionRecharge(Carte carte, BigDecimal montant, String requestId) {
+        // try {
+        // // Si vous avez une entité TransactionCarte pour l'historique
+        // Transaction transaction = new Transaction();
+        // transaction.setIdCarte(carte.getId());
+        // transaction.setType("RECHARGE");
+        // transaction.setMontant(montant);
+        // transaction.setDescription("Recharge Orange Money - " + requestId);
+        // transaction.setStatus("SUCCESS");
+        // transaction.setCreatedAt(LocalDateTime.now());
+        // // transactionCarteRepository.save(transaction);
+
+        // log.debug("📝 Transaction recharge enregistrée: {}", requestId);
+        // } catch (Exception e) {
+        // log.warn("⚠️ Erreur enregistrement historique recharge: {}", e.getMessage());
+        // // Ne pas faire échouer le crédit pour un problème d'historique
+        // }
+    }
+
+    private void enregistrerTransactionRemboursement(Carte carte, BigDecimal montant, String requestId) {
+        // try {
+        // Transaction transaction = new Transaction();
+        // transaction.setIdCarte(carte.getId());
+        // transaction.setType("REMBOURSEMENT");
+        // transaction.setMontant(montant);
+        // transaction.setDescription("Remboursement retrait échoué - " + requestId);
+        // transaction.setStatus("SUCCESS");
+        // transaction.setCreatedAt(LocalDateTime.now());
+        // // transactionCarteRepository.save(transaction);
+
+        // log.debug("📝 Transaction remboursement enregistrée: {}", requestId);
+        // } catch (Exception e) {
+        // log.warn("⚠️ Erreur enregistrement historique remboursement: {}",
+        // e.getMessage());
     }
 
     /**

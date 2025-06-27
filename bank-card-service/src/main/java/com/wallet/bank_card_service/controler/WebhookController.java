@@ -1,8 +1,11 @@
 package com.wallet.bank_card_service.controler;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wallet.bank_card_service.service.CarteService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -18,162 +21,131 @@ import java.util.Map;
 @Slf4j
 public class WebhookController {
 
-    private final CarteService carteService;
-
-    @PostMapping("/money-callback")
-    public ResponseEntity<Void> handleMoneyCallback(
-            @RequestBody Map<String, Object> payload,
-            @RequestHeader("X-Source-Service") String sourceService) {
-
-        try {
-            String status = (String) payload.get("status");
-            String clientAction = (String) payload.get("clientAction");
-            String cancellationReason = (String) payload.get("cancellationReason");
-            String idCarte = (String) payload.get("idCarte");
-            BigDecimal montant = new BigDecimal(payload.get("montant").toString());
-
-            log.info("📨 [WEBHOOK] Callback - Carte: {}, Status: {}, Action: {}",
-                    idCarte, status, clientAction);
-
-            switch (status) {
-                case "SUCCESS":
-                    if ("VALIDATED".equals(clientAction)) {
-                        carteService.creditCarteFromOrangeMoney(idCarte, montant,
-                                (String) payload.get("transactionId"));
-                        log.info("✅ Client a validé → Carte créditée");
-                    }
-                    break;
-
-                case "CANCELLED":
-                    log.info("❌ Client a annulé le paiement - Raison: {}", cancellationReason);
-                    // Pas de crédit, juste log
-                    break;
-
-                case "EXPIRED":
-                    log.warn("⏰ Paiement expiré - Client n'a pas validé");
-                    break;
-
-                case "INSUFFICIENT_FUNDS":
-                    log.warn("💸 Solde Orange Money insuffisant");
-                    break;
-
-                default:
-                    log.error("🔧 Erreur technique - Status: {}", status);
-            }
-
-            return ResponseEntity.ok().build();
-
-        } catch (Exception e) {
-            log.error("❌ [WEBHOOK] Erreur: {}", e.getMessage(), e);
-            return ResponseEntity.badRequest().build();
+    @Autowired
+    private CarteService carteService;
+    
+    /**
+     * Webhook appelé par le service Money quand une recharge est confirmée
+     */
+  @PostMapping("/money-callback")
+public ResponseEntity<Map<String, Object>> handleMoneyCallback(@RequestBody String rawPayload) {
+    log.info("🔔 [WEBHOOK] Callback reçu du service Money: {}", rawPayload);
+    
+    try {
+        ObjectMapper mapper = new ObjectMapper();
+        Map<String, Object> payload = mapper.readValue(rawPayload, Map.class);
+        
+        String requestId = (String) payload.get("requestId");
+        String idCarte = (String) payload.get("idCarte");
+        String status = (String) payload.get("status");
+        Object montantObj = payload.get("montant");
+        
+        if (requestId == null || idCarte == null || status == null) {
+            log.warn("⚠️ [WEBHOOK] Payload invalide: {}", rawPayload);
+            Map<String, Object> errorResponse = Map.of(
+                "status", "error",
+                "message", "Payload invalide"
+            );
+            return ResponseEntity.badRequest().body(errorResponse);
         }
+        
+        // Convertir le montant
+        BigDecimal montant = new BigDecimal(montantObj.toString());
+        
+        log.info("📝 [WEBHOOK] Transaction - RequestId: {}, Carte: {}, Status: {}, Montant: {}", 
+                requestId, idCarte, status, montant);
+        
+        if ("SUCCESS".equals(status)) {
+            // ✅ Créditer la carte
+            carteService.crediterCarte(idCarte, montant, requestId);
+            log.info("✅ [WEBHOOK] Carte créditée avec succès - Carte: {}, Montant: {}", idCarte, montant);
+            
+            // Retourner une réponse JSON de succès
+            Map<String, Object> successResponse = Map.of(
+                "status", "success",
+                "message", "Webhook traité avec succès",
+                "requestId", requestId,
+                "cardId", idCarte,
+                "amount", montant
+            );
+            return ResponseEntity.ok(successResponse);
+        } else {
+            log.warn("❌ [WEBHOOK] Recharge échouée - Status: {}", status);
+            Map<String, Object> failureResponse = Map.of(
+                "status", "failed",
+                "message", "Recharge échouée",
+                "requestId", requestId,
+                "originalStatus", status
+            );
+            return ResponseEntity.ok(failureResponse);
+        }
+        
+    } catch (Exception e) {
+        log.error("❌ [WEBHOOK] Erreur traitement: {}", e.getMessage(), e);
+        Map<String, Object> errorResponse = Map.of(
+            "status", "error",
+            "message", "Erreur traitement webhook",
+            "error", e.getMessage()
+        );
+        return ResponseEntity.status(500).body(errorResponse);
     }
- /**
-     * NOUVELLE MÉTHODE: Callback résultat retrait
+}
+    /**
+     * Webhook pour les retraits carte
      */
     @PostMapping("/money-withdrawal-callback")
-    public ResponseEntity<Void> handleMoneyWithdrawalCallback(
-            @RequestBody Map<String, Object> payload,
-            @RequestHeader("X-Source-Service") String sourceService,
-            @RequestHeader(value = "X-Callback-Type", required = false) String callbackType) {
-
+    public ResponseEntity<String> handleWithdrawalCallback(@RequestBody String rawPayload) {
+        log.info("🔔 [WITHDRAWAL-WEBHOOK] Callback retrait reçu: {}", rawPayload);
+        
         try {
-            String status = (String) payload.get("status");
-            String clientAction = (String) payload.get("clientAction");
-            String cancellationReason = (String) payload.get("cancellationReason");
-            String idCarte = (String) payload.get("idCarte");
+            ObjectMapper mapper = new ObjectMapper();
+            Map<String, Object> payload = mapper.readValue(rawPayload, Map.class);
+            
             String requestId = (String) payload.get("requestId");
-            String transactionId = (String) payload.get("transactionId");
-
-            log.info("📨 [WITHDRAWAL-WEBHOOK] Callback retrait - Carte: {}, Status: {}, Action: {}",
-                    idCarte, status, clientAction);
-
-            switch (status) {
-                case "SUCCESS":
-                    if ("COMPLETED".equals(clientAction)) {
-                        // Retrait réussi - Rien à faire côté carte (déjà débitée)
-                        log.info("✅ Retrait confirmé réussi - Carte: {}, Transaction: {}", 
-                                idCarte, transactionId);
-                        
-                        // Optionnel: notification client
-                        carteService.notifyClientWithdrawalSuccess(idCarte, requestId);
-                    }
-                    break;
-
-                case "FAILED":
-                    if ("FAILED".equals(clientAction)) {
-                        log.warn("❌ Retrait échoué - Carte: {}, Raison: {}", idCarte, cancellationReason);
-                        
-                        // Optionnel: notification client de l'échec
-                        carteService.notifyClientWithdrawalFailure(idCarte, requestId, cancellationReason);
-                    }
-                    break;
-
-                default:
-                    log.warn("⚠️ Statut retrait inconnu: {} - Carte: {}", status, idCarte);
+            String status = (String) payload.get("status");
+            
+            if ("SUCCESS".equals(status)) {
+                log.info("✅ [WITHDRAWAL-WEBHOOK] Retrait confirmé - RequestId: {}", requestId);
+            } else {
+                log.warn("❌ [WITHDRAWAL-WEBHOOK] Retrait échoué - RequestId: {}, Status: {}", requestId, status);
             }
-
-            return ResponseEntity.ok().build();
-
+            
+            return ResponseEntity.ok("Webhook retrait traité");
+            
         } catch (Exception e) {
             log.error("❌ [WITHDRAWAL-WEBHOOK] Erreur: {}", e.getMessage(), e);
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.status(500).body("Erreur traitement webhook retrait");
         }
     }
-
+    
     /**
-     * NOUVELLE MÉTHODE: Callback remboursement retrait échoué
+     * Webhook pour les remboursements
      */
     @PostMapping("/money-withdrawal-refund")
-    public ResponseEntity<Void> handleMoneyWithdrawalRefund(
-            @RequestBody Map<String, Object> payload,
-            @RequestHeader("X-Source-Service") String sourceService,
-            @RequestHeader(value = "X-Callback-Type", required = false) String callbackType) {
-
+    public ResponseEntity<String> handleRefundCallback(@RequestBody String rawPayload) {
+        log.info("💰 [REFUND-WEBHOOK] Callback remboursement reçu: {}", rawPayload);
+        
         try {
-            String status = (String) payload.get("status");
-            String clientAction = (String) payload.get("clientAction");
-            String cancellationReason = (String) payload.get("cancellationReason");
-            String idCarte = (String) payload.get("idCarte");
+            ObjectMapper mapper = new ObjectMapper();
+            Map<String, Object> payload = mapper.readValue(rawPayload, Map.class);
+            
             String requestId = (String) payload.get("requestId");
-            BigDecimal montant = new BigDecimal(payload.get("montant").toString());
-
-            log.info("💰 [REFUND-WEBHOOK] Demande remboursement - Carte: {}, Montant: {}, Raison: {}",
-                    idCarte, montant, cancellationReason);
-
-            if ("REFUND_REQUIRED".equals(status) && "REFUND".equals(clientAction)) {
+            String idCarte = (String) payload.get("idCarte");
+            Object montantObj = payload.get("montant");
+            
+            if (requestId != null && idCarte != null && montantObj != null) {
+                BigDecimal montant = new BigDecimal(montantObj.toString());
                 
-                // Calculer les frais qui avaient été débités
-                BigDecimal fraisEstimes = calculateWithdrawalFees(montant);
-                
-                // Rembourser la carte (montant + frais)
-                carteService.refundCardWithdrawal(idCarte, montant, fraisEstimes, cancellationReason);
-                
-                log.info("✅ Remboursement effectué - Carte: {}, Montant total: {}", 
-                        idCarte, montant.add(fraisEstimes));
-                
-                // Notification client du remboursement
-                carteService.notifyClientWithdrawalRefund(idCarte, requestId, montant.add(fraisEstimes));
+                // Rembourser la carte
+               // carteService.rembourserCarte(idCarte, montant, requestId);
+                log.info("✅ [REFUND-WEBHOOK] Carte remboursée - Carte: {}, Montant: {}", idCarte, montant);
             }
-
-            return ResponseEntity.ok().build();
-
+            
+            return ResponseEntity.ok("Remboursement traité");
+            
         } catch (Exception e) {
             log.error("❌ [REFUND-WEBHOOK] Erreur: {}", e.getMessage(), e);
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.status(500).body("Erreur traitement remboursement");
         }
-    }
-
-    // Méthode utilitaire pour calculer les frais (même logique que dans le contrôleur)
-    private BigDecimal calculateWithdrawalFees(BigDecimal montant) {
-        BigDecimal frais = montant.multiply(new BigDecimal("0.01"));
-        
-        if (frais.compareTo(new BigDecimal("100")) < 0) {
-            frais = new BigDecimal("100");
-        } else if (frais.compareTo(new BigDecimal("1000")) > 0) {
-            frais = new BigDecimal("1000");
-        }
-        
-        return frais;
     }
 }

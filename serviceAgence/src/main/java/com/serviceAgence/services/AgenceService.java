@@ -1,6 +1,5 @@
 package com.serviceAgence.services;
 
-
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -22,6 +21,7 @@ import com.serviceAgence.model.Agence;
 import com.serviceAgence.model.CompteUser;
 import com.serviceAgence.model.DocumentKYC;
 import com.serviceAgence.repository.AgenceRepository;
+import com.serviceAgence.repository.CompteRepository;
 import com.serviceAgence.repository.DocumentKYCRepository;
 
 import lombok.extern.slf4j.Slf4j;
@@ -39,7 +39,8 @@ public class AgenceService {
 
     @Autowired
     private CompteService compteService;
-
+    @Autowired
+    private CompteRepository compteRepository;
     @Autowired
     private TransactionService transactionService;
 
@@ -55,30 +56,28 @@ public class AgenceService {
     @Autowired
     private DocumentKYCRepository documentRepository;
 
-
     /**
      * Traitement complet d'une demande de création de compte
      */
     public RegistrationProcessingResult processRegistrationRequest(UserRegistrationRequest request) {
-        log.info("Traitement demande création compte: client={}, agence={}", 
+        log.info("Traitement demande création compte: client={}, agence={}",
                 request.getIdClient(), request.getIdAgence());
 
         try {
             // 1. Validation de l'agence
             Agence agence = getAgenceOrThrow(request.getIdAgence());
             if (!agence.isActive()) {
-                return RegistrationProcessingResult.rejected("AGENCE_INACTIVE", 
-                    "L'agence sélectionnée n'est pas active");
+                return RegistrationProcessingResult.rejected("AGENCE_INACTIVE",
+                        "L'agence sélectionnée n'est pas active");
             }
 
             // 2. Validation KYC des documents
             KYCValidationResult kycResult = kycService.validateDocumentsWithSelfie(
-                request.getIdClient(), 
-                request.getCni(),
-                request.getRectoCni(),
-                request.getVersoCni(),
-                request.getSelfieImage()
-            );
+                    request.getIdClient(),
+                    request.getCni(),
+                    request.getRectoCni(),
+                    request.getVersoCni(),
+                    request.getSelfieImage());
 
             if (!kycResult.isValid()) {
                 log.warn("Validation KYC échouée pour {}: {}", request.getIdClient(), kycResult.getReason());
@@ -91,10 +90,10 @@ public class AgenceService {
             accountRequest.setIdAgence(request.getIdAgence());
 
             AccountCreationResult accountResult = compteService.createAccount(accountRequest);
-            
+
             if (!accountResult.isSuccess()) {
-                return RegistrationProcessingResult.rejected(accountResult.getErrorCode(), 
-                    accountResult.getMessage());
+                return RegistrationProcessingResult.rejected(accountResult.getErrorCode(),
+                        accountResult.getMessage());
             }
 
             // 4. Notification de succès
@@ -104,29 +103,39 @@ public class AgenceService {
             // 5. Mise à jour statistiques agence
             updateAgenceStatistics(agence);
 
-            log.info("Compte créé avec succès: client={}, numéro={}", 
+            log.info("Compte créé avec succès: client={}, numéro={}",
                     request.getIdClient(), accountResult.getNumeroCompte());
 
-            return RegistrationProcessingResult.accepted(accountResult.getNumeroCompte(), 
-                "Compte créé avec succès");
+            return RegistrationProcessingResult.accepted(accountResult.getNumeroCompte(),
+                    "Compte créé avec succès");
 
         } catch (Exception e) {
             log.error("Erreur traitement demande: {}", e.getMessage(), e);
-            return RegistrationProcessingResult.rejected("ERREUR_TECHNIQUE", 
-                "Erreur technique lors du traitement");
+            return RegistrationProcessingResult.rejected("ERREUR_TECHNIQUE",
+                    "Erreur technique lors du traitement");
         }
     }
 
     /**
      * Traitement d'une transaction
      */
+
     public TransactionResult processTransaction(TransactionRequest request) {
-        log.info("Traitement transaction: type={}, montant={}, compte={}", 
-                request.getType(), request.getMontant(), request.getCompteSource());
+        log.info("Traitement transaction début: type={}, montant={}, compte={}, agence={}",
+                request.getType(), request.getMontant(), request.getCompteSource(), request.getIdAgence());
 
         try {
+            // ✅ VALIDATION SUPPLÉMENTAIRE
+            if (request.getIdAgence() == null || request.getIdAgence().trim().isEmpty()) {
+                log.error("❌ ID Agence null ou vide dans processTransaction!");
+                return TransactionResult.failed("AGENCE_MANQUANTE", "ID Agence requis");
+            }
+
             // Validation de l'agence
+            log.info("🔍 Recherche agence avec ID: {}", request.getIdAgence());
             Agence agence = getAgenceOrThrow(request.getIdAgence());
+            log.info("✅ Agence trouvée: {}", agence.getNom());
+
             if (!agence.isActive()) {
                 throw new AgenceException("AGENCE_INACTIVE", "Agence non active");
             }
@@ -141,8 +150,11 @@ public class AgenceService {
 
             return result;
 
+        } catch (IllegalArgumentException e) {
+            log.error("❌ Erreur ID Agence invalide: {}", e.getMessage());
+            return TransactionResult.failed("AGENCE_INVALIDE", "ID Agence invalide: " + request.getIdAgence());
         } catch (Exception e) {
-            log.error("Erreur traitement transaction: {}", e.getMessage(), e);
+            log.error("❌ Erreur traitement transaction: {}", e.getMessage(), e);
             return TransactionResult.failed("TXN_ERROR", "Erreur technique");
         }
     }
@@ -202,8 +214,14 @@ public class AgenceService {
      */
     private Agence getAgenceOrThrow(String idAgence) {
         return agenceRepository.findById(idAgence)
-                .orElseThrow(() -> new AgenceException("AGENCE_INTROUVABLE", 
-                    "Agence " + idAgence + " introuvable"));
+                .orElseThrow(() -> new AgenceException("AGENCE_INTROUVABLE",
+                        "Agence " + idAgence + " introuvable"));
+    }
+
+    private CompteUser getAgenceOrThrow2(String idcompte) {
+        return compteRepository.findById(idcompte)
+                .orElseThrow(() -> new AgenceException("Compte_INTROUVABLE",
+                        "Agence " + idcompte + " introuvable"));
     }
 
     /**
@@ -211,10 +229,10 @@ public class AgenceService {
      */
     public boolean validateAgenceLimits(String idAgence, BigDecimal montant) {
         Agence agence = getAgenceOrThrow(idAgence);
-        
+
         // Vérifier capital disponible
         if (agence.getSoldeDisponible().compareTo(montant) < 0) {
-            log.warn("Limite capital dépassée pour agence {}: requis={}, disponible={}", 
+            log.warn("Limite capital dépassée pour agence {}: requis={}, disponible={}",
                     idAgence, montant, agence.getSoldeDisponible());
             return false;
         }
@@ -264,30 +282,30 @@ public class AgenceService {
             accountRequest.setIdAgence(idAgence);
 
             AccountCreationResult accountResult = compteService.createAccount(accountRequest);
-            
+
             if (!accountResult.isSuccess()) {
                 throw new AgenceException(accountResult.getErrorCode(), accountResult.getMessage());
             }
 
             // Récupérer le compte créé
             CompteUser compte = compteService.getAccountDetails(accountResult.getNumeroCompte().toString());
-            
+
             // Envoyer notification de succès au UserService
             notificationService.sendAccountCreationNotification(compte);
-            
-            // Envoyer réponse d'acceptation au UserService via RabbitMQ
-            eventPublisher.sendRegistrationResponse(idClient, idAgence, 
-                null, // email sera récupéré depuis le document
-                RegistrationProcessingResult.accepted(accountResult.getNumeroCompte(), 
-                    "Compte créé avec succès après approbation manuelle"));
 
-            log.info("✅ Compte créé avec succès après approbation: client={}, compte={}", 
+            // Envoyer réponse d'acceptation au UserService via RabbitMQ
+            eventPublisher.sendRegistrationResponse(idClient, idAgence,
+                    null, // email sera récupéré depuis le document
+                    RegistrationProcessingResult.accepted(accountResult.getNumeroCompte(),
+                            "Compte créé avec succès après approbation manuelle"));
+
+            log.info("✅ Compte créé avec succès après approbation: client={}, compte={}",
                     idClient, accountResult.getNumeroCompte());
 
         } catch (Exception e) {
             log.error("❌ Erreur création compte après approbation: {}", e.getMessage(), e);
-            throw new AgenceException("CREATION_COMPTE_FAILED", 
-                "Erreur lors de la création du compte: " + e.getMessage());
+            throw new AgenceException("CREATION_COMPTE_FAILED",
+                    "Erreur lors de la création du compte: " + e.getMessage());
         }
     }
 
@@ -299,10 +317,10 @@ public class AgenceService {
 
         try {
             // Envoyer réponse de rejet au UserService via RabbitMQ
-            eventPublisher.sendRegistrationResponse(idClient, idAgence, 
-                null, // email sera récupéré
-                RegistrationProcessingResult.rejected("DOCUMENTS_REJECTED", 
-                    "Documents rejetés: " + reason));
+            eventPublisher.sendRegistrationResponse(idClient, idAgence,
+                    null, // email sera récupéré
+                    RegistrationProcessingResult.rejected("DOCUMENTS_REJECTED",
+                            "Documents rejetés: " + reason));
 
             log.info("📤 Notification rejet envoyée vers UserService: client={}", idClient);
 
@@ -319,130 +337,128 @@ public class AgenceService {
         try {
             // TODO: Implémenter stockage sécurisé (filesystem, S3, etc.)
             // Pour l'instant, retourner un chemin fictif
-            String fileName = String.format("%s_%s_%s_%d.jpg", 
-                clientId, type, LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")), 
-                System.currentTimeMillis());
-            
+            String fileName = String.format("%s_%s_%s_%d.jpg",
+                    clientId, type, LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")),
+                    System.currentTimeMillis());
+
             String storagePath = "/secure/documents/" + fileName;
-            
+
             // Ici vous devriez implémenter le stockage réel
             // Files.write(Paths.get(storagePath), imageData);
-            
+
             log.debug("📁 Image stockée: {}", storagePath);
             return storagePath;
-            
+
         } catch (Exception e) {
             log.error("❌ Erreur stockage image: {}", e.getMessage());
             throw new AgenceException("IMAGE_STORAGE_FAILED", "Erreur stockage image");
         }
     }
+
     /**
      * Traitement avec selfie et approbation manuelle
      */
     public RegistrationProcessingResult processRegistrationRequestWithManualApproval(UserRegistrationRequest request) {
-        log.info("🔄 Traitement demande avec selfie: client={}, agence={}", 
+        log.info("🔄 Traitement demande avec selfie: client={}, agence={}",
                 request.getIdClient(), request.getIdAgence());
 
         try {
             // 1. Validation de l'agence
             Agence agence = getAgenceOrThrow(request.getIdAgence());
             if (!agence.isActive()) {
-                return RegistrationProcessingResult.rejected("AGENCE_INACTIVE", 
-                    "L'agence sélectionnée n'est pas active");
+                return RegistrationProcessingResult.rejected("AGENCE_INACTIVE",
+                        "L'agence sélectionnée n'est pas active");
             }
 
             // 2. Validation de base des documents (format, taille, etc.)
             KYCValidationResult basicValidation = kycService.validateDocumentsBasic(
-                request.getIdClient(), 
-                request.getCni(),
-                request.getRectoCni(),
-                request.getVersoCni()
-            );
+                    request.getIdClient(),
+                    request.getCni(),
+                    request.getRectoCni(),
+                    request.getVersoCni());
 
             if (!basicValidation.isValid()) {
                 log.warn("Validation de base échouée pour {}: {}", request.getIdClient(), basicValidation.getReason());
-                return RegistrationProcessingResult.rejected(basicValidation.getErrorCode(), basicValidation.getReason());
+                return RegistrationProcessingResult.rejected(basicValidation.getErrorCode(),
+                        basicValidation.getReason());
             }
 
             // 3. Validation et analyse du selfie
             if (!request.hasSelfie()) {
                 log.warn("Selfie manquant pour client: {}", request.getIdClient());
-                return RegistrationProcessingResult.rejected("SELFIE_REQUIRED", 
-                    "Selfie utilisateur obligatoire pour la vérification d'identité");
+                return RegistrationProcessingResult.rejected("SELFIE_REQUIRED",
+                        "Selfie utilisateur obligatoire pour la vérification d'identité");
             }
 
             // 4. Analyse faciale du selfie
             SelfieAnalysisResult selfieAnalysis = facialVerificationService.analyzeSelfie(
-                request.getSelfieImage(), 
-                request.getRectoCni()
-            );
+                    request.getSelfieImage(),
+                    request.getRectoCni());
 
-            log.info("📸 Analyse selfie - Qualité: {}, Similarité: {}, Vie: {}", 
-                    selfieAnalysis.getQualityScore(), 
-                    selfieAnalysis.getSimilarityScore(), 
+            log.info("📸 Analyse selfie - Qualité: {}, Similarité: {}, Vie: {}",
+                    selfieAnalysis.getQualityScore(),
+                    selfieAnalysis.getSimilarityScore(),
                     selfieAnalysis.isLivenessDetected());
 
-
-            
             // 5. Créer document avec toutes les informations (CNI + Selfie)
             DocumentKYC document = createDocumentWithSelfie(request, basicValidation, selfieAnalysis);
             log.info("document", document);
 
             documentRepository.save(document);
             System.out.println("Document KYC enregistré: " + document.getIdClient());
-            
+
             log.info("📄 Document avec selfie créé en attente d'approbation: client={}", request.getIdClient());
 
             // 6. Retourner résultat "en attente d'approbation manuelle"
-            return RegistrationProcessingResult.pendingManualApproval(request.getIdClient(), 
-                "Documents et selfie reçus. En attente d'approbation manuelle par l'agence.");
+            return RegistrationProcessingResult.pendingManualApproval(request.getIdClient(),
+                    "Documents et selfie reçus. En attente d'approbation manuelle par l'agence.");
 
         } catch (Exception e) {
             log.error("Erreur traitement demande avec selfie: {}", e.getMessage(), e);
-            return RegistrationProcessingResult.rejected("ERREUR_TECHNIQUE", 
-                "Erreur technique lors du traitement avec selfie");
+            return RegistrationProcessingResult.rejected("ERREUR_TECHNIQUE",
+                    "Erreur technique lors du traitement avec selfie");
         }
     }
 
     /**
      * Création du document KYC avec selfie
      */
-    private DocumentKYC createDocumentWithSelfie(UserRegistrationRequest request, 
-                                            KYCValidationResult basicValidation,
-                                            SelfieAnalysisResult selfieAnalysis) {
+    private DocumentKYC createDocumentWithSelfie(UserRegistrationRequest request,
+            KYCValidationResult basicValidation,
+            SelfieAnalysisResult selfieAnalysis) {
         DocumentKYC document = new DocumentKYC();
-        
+
         // Informations de base
         document.setIdClient(request.getIdClient());
         document.setIdAgence(request.getIdAgence());
         document.setNumeroDocument(request.getCni());
         document.setStatus(DocumentStatus.RECEIVED);
         document.setUploadedAt(LocalDateTime.now());
-        
+
         // Informations extraites (placeholder - à implémenter avec OCR)
         document.setNomExtrait(request.getNom());
         document.setPrenomExtrait(request.getPrenom());
-        
+
         // Stockage sécurisé des images
         document.setCheminRecto(storeImageSecurely(request.getRectoCni(), "recto", request.getIdClient()));
         document.setCheminVerso(storeImageSecurely(request.getVersoCni(), "verso", request.getIdClient()));
         document.setCheminSelfie(storeImageSecurely(request.getSelfieImage(), "selfie", request.getIdClient()));
-        
+
         // Scores de qualité
         document.setScoreQualite(basicValidation.getQualityScore());
         document.setSelfieQualityScore(selfieAnalysis.getQualityScore());
         document.setSelfieSimilarityScore(selfieAnalysis.getSimilarityScore());
         document.setLivenessDetected(selfieAnalysis.isLivenessDetected());
-        
+
         // Métadonnées des fichiers
         document.setFileSize((long) request.getRectoCni().length);
         document.setSelfieFileSize(request.getSelfieSize());
-        
+
         // Hash pour intégrité
         document.setHashRecto(calculateHash(request.getRectoCni()));
         document.setHashVerso(calculateHash(request.getVersoCni()));
         document.setHashSelfie(calculateHash(request.getSelfieImage()));
-        
+
         // Anomalies détectées
         List<String> allAnomalies = new ArrayList<>();
         if (basicValidation.getAnomalies() != null) {
@@ -452,7 +468,7 @@ public class AgenceService {
             allAnomalies.addAll(selfieAnalysis.getAnomalies());
         }
         document.setAnomaliesDetectees(allAnomalies);
-        
+
         return document;
     }
 

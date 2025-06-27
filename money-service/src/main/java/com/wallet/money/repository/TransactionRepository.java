@@ -6,6 +6,7 @@ import java.util.Optional;
 
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.data.mongodb.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import com.wallet.money.entity.Transaction;
@@ -14,10 +15,10 @@ import com.wallet.money.entity.Transaction;
 public interface TransactionRepository extends MongoRepository<Transaction, String> {
     List<Transaction> findByStatusAndCreatedAtBefore(String status, LocalDateTime dateTime);
 
-    List<Transaction> findByStatus(String status);
+    // List<Transaction> findByStatus(String status);
 
-    // Trouver par référence FreemoPay
-    Optional<Transaction> findByFreemoReference(String freemoReference);
+    // // Trouver par référence FreemoPay
+    // Optional<Transaction> findByFreemoReference(String freemoReference);
 
     // Trouver par notre ID externe
     Optional<Transaction> findByExternalId(String externalId);
@@ -48,4 +49,29 @@ public interface TransactionRepository extends MongoRepository<Transaction, Stri
 
     @Query("{'type': 'CARD_WITHDRAWAL', 'status': 'PENDING', 'createdAt': {$lt: ?0}}")
     List<Transaction> findExpiredCardWithdrawals(LocalDateTime expiredBefore);
+      
+    /**
+     * Trouve les transactions en statut PENDING plus anciennes que la date donnée
+     */
+    @Query("SELECT t FROM Transaction t WHERE t.status = 'PENDING' AND t.createdAt < :cutoffDate")
+    List<Transaction> findPendingTransactionsOlderThan(@Param("cutoffDate") LocalDateTime cutoffDate);
+    
+    /**
+     * Trouve les transactions par statut
+     */
+    @Query("SELECT t FROM Transaction t WHERE t.status = :status")
+    List<Transaction> findByStatus(@Param("status") String status);
+    
+    /**
+     * Trouve une transaction par référence FreemoPay
+     */
+    @Query("SELECT t FROM Transaction t WHERE t.freemoReference = :reference")
+    Optional<Transaction> findByFreemoReference(@Param("reference") String reference);
+    
+    /**
+     * Trouve les transactions en attente par carte
+     */
+    @Query("SELECT t FROM Transaction t WHERE t.idCarte = :cardId AND t.status IN ('PENDING', 'INITIATED')")
+    List<Transaction> findPendingTransactionsByCard(@Param("cardId") String cardId);
+
 }

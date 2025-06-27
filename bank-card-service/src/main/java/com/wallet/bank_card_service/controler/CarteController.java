@@ -1,6 +1,8 @@
 package com.wallet.bank_card_service.controler;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -23,9 +25,11 @@ import com.wallet.bank_card_service.dto.CarteWithdrawalResult;
 import com.wallet.bank_card_service.dto.OrangeMoneyRechargeRequest;
 import com.wallet.bank_card_service.dto.PinChangeRequest;
 import com.wallet.bank_card_service.dto.RechargeResult;
+import com.wallet.bank_card_service.dto.TransferCardToCardRequest;
 import com.wallet.bank_card_service.dto.TransfertCarteRequest;
 import com.wallet.bank_card_service.dto.TransfertCarteResult;
 import com.wallet.bank_card_service.model.Carte;
+import com.wallet.bank_card_service.service.AgenceServiceClient;
 import com.wallet.bank_card_service.service.CarteService;
 import com.wallet.bank_card_service.service.MoneyServiceClient;
 
@@ -48,9 +52,11 @@ public class CarteController {
     private CarteService carteService;
     @Autowired
     private MoneyServiceClient moneyServiceClient;
+    @Autowired
+    private AgenceServiceClient agenceServiceClient;
 
     /**
-     * Créer une nouvelle carte bancaire
+     * Créer une nouvelle carte bancaire ok!
      */
     @PostMapping("/create")
     @PreAuthorize("hasRole('CLIENT')")
@@ -67,9 +73,11 @@ public class CarteController {
 
         try {
             String clientId = extractClientId(authentication);
+
             request.setIdClient(clientId);
 
-            log.info("🆕 Demande création carte: client={}, type={}", clientId, request.getType());
+            log.info("🆕 Demande création carte: client={},agence={} type={}", clientId, request.getIdAgence(),
+                    request.getType());
 
             CarteCreationResult result = carteService.createCarte(request);
 
@@ -89,7 +97,7 @@ public class CarteController {
     }
 
     /**
-     * Lister toutes les cartes d'un client
+     * Lister toutes les cartes d'un client ok!
      */
     @GetMapping("/my-cards")
     @PreAuthorize("hasRole('CLIENT')")
@@ -111,7 +119,7 @@ public class CarteController {
     }
 
     /**
-     * Détails d'une carte spécifique
+     * Détails d'une carte spécifique ok!
      */
     @GetMapping("/{idCarte}")
     @PreAuthorize("hasRole('CLIENT')")
@@ -134,7 +142,7 @@ public class CarteController {
     }
 
     /**
-     * Transfert d'argent du compte vers une carte
+     * Transfert d'argent du compte vers une carte ok!
      */
     @PostMapping("/transfer-to-card")
     @PreAuthorize("hasRole('CLIENT')")
@@ -148,12 +156,16 @@ public class CarteController {
     public ResponseEntity<TransfertCarteResult> transferToCard(
             @Valid @RequestBody TransfertCarteRequest request,
             Authentication authentication) {
+        log.info("💳 Transfert vers carte1: compte={}, carte={}, montant={},agence={}",
+                request.getNumeroCompteSource(), request.getIdCarteDestination(), request.getMontant(),
+                request.getIdAgence());
 
         try {
             String clientId = extractClientId(authentication);
 
-            log.info("💳 Transfert vers carte: compte={}, carte={}, montant={}",
-                    request.getNumeroCompteSource(), request.getIdCarteDestination(), request.getMontant());
+            log.info("💳 Transfert vers carte: compte={}, carte={}, montant={},agence={}",
+                    request.getNumeroCompteSource(), request.getIdCarteDestination(), request.getMontant(),
+                    request.getIdAgence());
 
             TransfertCarteResult result = carteService.transferToCard(request, clientId);
 
@@ -173,41 +185,7 @@ public class CarteController {
     }
 
     /**
-     * Transfert d'argent d'une carte vers le compte
-     */
-    @PostMapping("/{idCarte}/transfer-to-account")
-    @PreAuthorize("hasRole('CLIENT')")
-    @Operation(summary = "Transférer de l'argent d'une carte vers le compte")
-    public ResponseEntity<TransfertCarteResult> transferFromCard(
-            @PathVariable @NotBlank String idCarte,
-            @RequestParam BigDecimal montant,
-            @RequestParam(required = false) String description,
-            Authentication authentication) {
-
-        try {
-            String clientId = extractClientId(authentication);
-
-            log.info("🏦 Transfert depuis carte: carte={}, montant={}", idCarte, montant);
-
-            TransfertCarteResult result = carteService.transferFromCard(idCarte, montant, description, clientId);
-
-            if (result.isSuccess()) {
-                return ResponseEntity.ok(result);
-            } else {
-                HttpStatus status = getHttpStatusFromError(result.getErrorCode());
-                return ResponseEntity.status(status).body(result);
-            }
-
-        } catch (Exception e) {
-            log.error("❌ Erreur transfert depuis carte: {}", e.getMessage(), e);
-            TransfertCarteResult errorResult = TransfertCarteResult.failed("ERREUR_TECHNIQUE",
-                    "Erreur technique lors du transfert");
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResult);
-        }
-    }
-
-    /**
-     * Bloquer une carte
+     * Bloquer une carte ok!
      */
     @PutMapping("/{idCarte}/block")
     @PreAuthorize("hasRole('CLIENT')")
@@ -239,13 +217,14 @@ public class CarteController {
     }
 
     /**
-     * Débloquer une carte
+     * Débloquer une carte ok!
      */
     @PutMapping("/{idCarte}/unblock")
     @PreAuthorize("hasRole('CLIENT')")
     @Operation(summary = "Débloquer une carte bancaire")
     public ResponseEntity<CarteOperationResult> unblockCard(
             @PathVariable @NotBlank String idCarte,
+
             Authentication authentication) {
 
         try {
@@ -270,7 +249,7 @@ public class CarteController {
     }
 
     /**
-     * Modifier les paramètres d'une carte
+     * Modifier les paramètres d'une carte ok !
      */
     @PutMapping("/{idCarte}/settings")
     @PreAuthorize("hasRole('CLIENT')")
@@ -302,7 +281,7 @@ public class CarteController {
     }
 
     /**
-     * Changer le code PIN d'une carte
+     * Changer le code PIN d'une carte ok!
      */
     @PutMapping("/{idCarte}/change-pin")
     @PreAuthorize("hasRole('CLIENT')")
@@ -361,36 +340,34 @@ public class CarteController {
     @PreAuthorize("hasRole('CLIENT')")
     @Operation(summary = "Transférer entre deux cartes")
     public ResponseEntity<TransfertCarteResult> transferBetweenCards(
-            @RequestParam @NotBlank String idCarteSource,
-            @RequestParam @NotBlank String idCarteDestination,
-            @RequestParam BigDecimal montant,
-            @RequestParam(required = false) String description,
+            @RequestBody @Valid TransferCardToCardRequest request,
             Authentication authentication) {
 
         try {
-            String clientId = extractClientId(authentication);
+            String clientId = "1";
 
             log.info("💳➡️💳 Transfert carte à carte: {} -> {}, montant={}",
-                    idCarteSource, idCarteDestination, montant);
+                    request.getNumeroCompteSource(), request.getIdCarteDestination(), request.getMontant());
 
-            // Simuler le transfert via le compte (débit carte source, crédit compte, débit
-            // compte, crédit carte destination)
-            // Pour simplifier, on fait un transfert direct
-            TransfertCarteResult debitResult = carteService.transferFromCard(idCarteSource, montant,
-                    "Transfert vers carte " + idCarteDestination, clientId);
+            TransfertCarteResult debitResult = carteService.transferFromCard(
+                    request.getNumeroCompteSource(),
+                    request.getMontant(),
+                    "Transfert vers carte " + request.getIdCarteDestination(),
+                    clientId);
 
             if (!debitResult.isSuccess()) {
                 return ResponseEntity.badRequest().body(debitResult);
             }
 
             // Récupérer les détails de la carte destination pour avoir son compte
-            Carte carteDestination = carteService.getCardDetails(idCarteDestination, clientId);
+            Carte carteDestination = carteService.getCardDetails(request.getIdCarteDestination(), clientId);
 
             TransfertCarteRequest creditRequest = new TransfertCarteRequest();
             creditRequest.setNumeroCompteSource(carteDestination.getNumeroCompte());
-            creditRequest.setIdCarteDestination(idCarteDestination);
-            creditRequest.setMontant(montant);
-            creditRequest.setDescription(description != null ? description : "Transfert depuis carte " + idCarteSource);
+            creditRequest.setIdCarteDestination(request.getIdCarteDestination());
+            creditRequest.setMontant(request.getMontant());
+            creditRequest.setDescription(request.getDescription() != null ? request.getDescription()
+                    : "Transfert depuis carte " + request.getNumeroCompteSource());
 
             TransfertCarteResult creditResult = carteService.transferToCard(creditRequest, clientId);
 
@@ -409,7 +386,7 @@ public class CarteController {
     }
 
     /**
-     * Historique des transactions d'une carte
+     * Historique des transactions d'une carte ok!
      */
     @GetMapping("/{idCarte}/transactions")
     @PreAuthorize("hasRole('CLIENT')")
@@ -420,7 +397,7 @@ public class CarteController {
             Authentication authentication) {
 
         try {
-            String clientId = extractClientId(authentication);
+            String clientId = "extractClientId(authentication)";
 
             Carte carte = carteService.getCardDetails(idCarte, clientId);
 
@@ -438,7 +415,7 @@ public class CarteController {
     }
 
     /**
-     * Configuration des frais par type de carte (Info publique)
+     * Configuration des frais par type de carte (Info publique) ok!
      */
     @GetMapping("/config/fees")
     @Operation(summary = "Configuration des frais par type de carte")
@@ -468,72 +445,45 @@ public class CarteController {
     }
 
     /**
-     * Simulation de création de carte (coûts et limites)
+     * Lister toutes les cartes (Admin) ok!
      */
-    @PostMapping("/simulate-creation")
-    @PreAuthorize("hasRole('CLIENT')")
-    @Operation(summary = "Simuler la création d'une carte")
-    public ResponseEntity<Map<String, Object>> simulateCardCreation(
-            @RequestParam String typecarte,
-            Authentication authentication) {
 
-        try {
-            String clientId = extractClientId(authentication);
-
-            // Récupérer le nombre de cartes existantes
-            List<Carte> existingCards = carteService.getClientCards(clientId);
-
-            CarteType type = CarteType.valueOf(typecarte.toUpperCase());
-
-            Map<String, Object> simulation = Map.of(
-                    "type", type.getLibelle(),
-                    "fraisCreation", type.getFraisCreation(),
-                    "fraisMensuels",
-                    type == CarteType.VIRTUELLE_GRATUITE ? "0 FCFA"
-                            : (type == CarteType.VIRTUELLE_PREMIUM ? "1,000 FCFA" : "2,500 FCFA"),
-                    "limiteDailyDefault", type.getLimiteDailyDefault(),
-                    "limiteMonthlyDefault", type.getLimiteMonthlyDefault(),
-                    "cartesExistantes", existingCards.size(),
-                    "maxCartes", 5,
-                    "canCreate", existingCards.size() < 5,
-                    "restrictions",
-                    type == CarteType.VIRTUELLE_GRATUITE ? "Une seule carte gratuite autorisée" : "Aucune restriction");
-
-            return ResponseEntity.ok(simulation);
-
-        } catch (Exception e) {
-            log.error("❌ Erreur simulation création: {}", e.getMessage(), e);
-            return ResponseEntity.badRequest().build();
-        }
-    }
-
-    // ========================================
-    // ENDPOINTS ADMINISTRATIFS
-    // ========================================
-
-    /**
-     * Lister toutes les cartes (Admin)
-     */
     @GetMapping("/admin/all")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Lister toutes les cartes (Admin)")
-    public ResponseEntity<List<Carte>> getAllCards(
+    public ResponseEntity<?> getAllCards(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
 
         try {
-            // Implementation simplifiée - en réalité utiliser Pageable
+            log.info("📋 Récupération de toutes les cartes - Page: {}, Size: {}", page, size);
+
+            // Validation des paramètres
+            if (page < 0 || size <= 0 || size > 100) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "Paramètres invalides",
+                                "message", "page >= 0 et 0 < size <= 100"));
+            }
+
             List<Carte> cartes = carteService.getAllCardsForAdmin(page, size);
-            return ResponseEntity.ok(cartes);
+
+            log.info("✅ {} cartes récupérées avec succès", cartes.size());
+            return ResponseEntity.ok(Map.of(
+                    "data", cartes,
+                    "page", page,
+                    "size", size,
+                    "total", cartes.size()));
 
         } catch (Exception e) {
             log.error("❌ Erreur récupération toutes cartes: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Erreur interne",
+                            "message", "Impossible de récupérer les cartes"));
         }
     }
 
     /**
-     * Bloquer/débloquer une carte (Admin)
+     * Bloquer/débloquer une carte (Admin) ok!
      */
     @PutMapping("/admin/{idCarte}/admin-block")
     @PreAuthorize("hasRole('ADMIN')")
@@ -561,25 +511,6 @@ public class CarteController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResult);
         }
     }
-
-    /**
-     * Santé du service
-     */
-    @GetMapping("/health")
-    @Operation(summary = "Vérifier la santé du service")
-    public ResponseEntity<Map<String, Object>> healthCheck() {
-        Map<String, Object> health = Map.of(
-                "status", "UP",
-                "service", "CarteService",
-                "version", "1.0.0",
-                "timestamp", java.time.LocalDateTime.now());
-
-        return ResponseEntity.ok(health);
-    }
-
-    // ========================================
-    // MÉTHODES UTILITAIRES
-    // ========================================
 
     private String extractClientId(Authentication authentication) {
         if (authentication.getPrincipal() instanceof org.springframework.security.core.userdetails.UserDetails) {
@@ -616,7 +547,7 @@ public class CarteController {
                     idCarte, request.getMontant());
 
             String clientId = authentication.getName();
-
+            // String clientId = "1";
             // Vérifier que la carte appartient au client
             Carte carte = carteService.findById(idCarte);
             if (carte == null || !carte.getIdClient().equals(clientId)) {
@@ -650,60 +581,12 @@ public class CarteController {
         }
     }
 
-
-    /*
-     * recharge d'une carte de credit par l'api money service
-     */
-    @PostMapping("/{idCarte}/debit-orange-money")
-    @PreAuthorize("hasRole('CLIENT')")
-    public ResponseEntity<RechargeResult> debitFromOrangeMoney(
-            @PathVariable String idCarte,
-            @RequestBody @Valid OrangeMoneyRechargeRequest request,
-            Authentication authentication) {
-
-        try {
-            log.info("💳 [RECHARGE] Demande recharge Orange Money - Carte: {}, Montant: {}",
-                    idCarte, request.getMontant());
-
-            String clientId = authentication.getName();
-
-            // Vérifier que la carte appartient au client
-            Carte carte = carteService.findById(idCarte);
-            if (carte == null || !carte.getIdClient().equals(clientId)) {
-                return ResponseEntity.badRequest().body(
-                        RechargeResult.failed("Carte non trouvée ou non autorisée"));
-            }
-
-            // Vérifier que la carte est active
-            if (!carte.isActive()) {
-                return ResponseEntity.badRequest().body(
-                        RechargeResult.failed("Carte non active"));
-            }
-
-            // Appeler le service Money
-            Map<String, Object> moneyResponse = moneyServiceClient.initiateCardRecharge(idCarte, request, clientId);
-
-            String status = (String) moneyResponse.get("status");
-            String message = (String) moneyResponse.get("message");
-            String requestId = (String) moneyResponse.get("requestId");
-
-            if ("PENDING".equals(status)) {
-                return ResponseEntity.ok(RechargeResult.success(requestId, request.getMontant(), message));
-            } else {
-                return ResponseEntity.badRequest().body(RechargeResult.failed(message));
-            }
-
-        } catch (Exception e) {
-            log.error("❌ [RECHARGE] Erreur: {}", e.getMessage(), e);
-            return ResponseEntity.badRequest().body(
-                    RechargeResult.failed("Erreur technique: " + e.getMessage()));
-        }
-    }
     /**
-     * NOUVELLE MÉTHODE: Retrait depuis carte vers Orange/MTN Money
+     * NOUVELLE MÉTHODE: Retrait depuis carte vers Orange/MTN Money utilisation de
+     * raabitmq
      */
     @PostMapping("/{idCarte}/withdraw-to-mobile-money")
-    @PreAuthorize("hasRole('CLIENT')")
+    // @PreAuthorize("hasRole('CLIENT')")
     @Operation(summary = "Retirer de l'argent d'une carte vers Orange/MTN Money")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Retrait initié avec succès"),
@@ -717,10 +600,11 @@ public class CarteController {
             Authentication authentication) {
 
         try {
-            log.info("💸 [WITHDRAWAL] Demande retrait - Carte: {}, Montant: {}, Provider: {}", 
+            log.info("💸 [WITHDRAWAL] Demande retrait - Carte: {}, Montant: {}, Provider: {}",
                     idCarte, request.getMontant(), request.getProvider());
 
-            String clientId = authentication.getName();
+            // String clientId = authentication.getName();
+            String clientId = "1";
 
             // 1. Vérifier que la carte appartient au client et est active
             Carte carte = carteService.findById(idCarte);
@@ -749,7 +633,7 @@ public class CarteController {
             // 4. Vérifier solde carte suffisant (inclus les frais)
             BigDecimal fraisEstimes = calculateWithdrawalFees(request.getMontant());
             BigDecimal montantTotal = request.getMontant().add(fraisEstimes);
-            
+
             if (carte.getSolde().compareTo(montantTotal) < 0) {
                 return ResponseEntity.status(HttpStatus.PAYMENT_REQUIRED).body(
                         CarteWithdrawalResult.failed("Solde insuffisant. Requis: " + montantTotal + " FCFA"));
@@ -763,11 +647,12 @@ public class CarteController {
             String requestId = (String) moneyResponse.get("reference");
 
             if ("SUCCESS".equals(status) || "PENDING".equals(status)) {
-                // 6. Débiter immédiatement la carte (le Money Service gère les remboursements en cas d'échec)
+                // 6. Débiter immédiatement la carte (le Money Service gère les remboursements
+                // en cas d'échec)
                 carteService.debitCarteForWithdrawal(idCarte, request.getMontant(), fraisEstimes, requestId);
-                
+
                 return ResponseEntity.ok(CarteWithdrawalResult.success(
-                        requestId, idCarte, request.getMontant(), fraisEstimes, 
+                        requestId, idCarte, request.getMontant(), fraisEstimes,
                         carte.getSolde().subtract(montantTotal), request.getProvider(), message));
             } else {
                 return ResponseEntity.badRequest().body(CarteWithdrawalResult.failed(message));
@@ -797,8 +682,8 @@ public class CarteController {
 
             List<Carte.CarteAction> withdrawals = carte.getActionsHistory()
                     .stream()
-                    .filter(action -> action.getType() == Carte.CarteActionType.DEBIT && 
-                                    action.getDescription().contains("Retrait"))
+                    .filter(action -> action.getType() == Carte.CarteActionType.DEBIT &&
+                            action.getDescription().contains("Retrait"))
                     .limit(limit)
                     .toList();
 
@@ -812,21 +697,117 @@ public class CarteController {
 
     // Méthode utilitaire pour calculer les frais
     private BigDecimal calculateWithdrawalFees(BigDecimal montant) {
-        // Même logique que Money Service: utiliser leurs frais existants
-        // Par exemple: 1% du montant avec min 100 FCFA et max 1000 FCFA
         BigDecimal frais = montant.multiply(new BigDecimal("0.01"));
-        
+
         if (frais.compareTo(new BigDecimal("100")) < 0) {
             frais = new BigDecimal("100");
         } else if (frais.compareTo(new BigDecimal("1000")) > 0) {
             frais = new BigDecimal("1000");
         }
-        
+
         return frais;
     }
 
+    /**
+     * Endpoint de santé du service carte
+     */
+    @GetMapping("/health")
+    public ResponseEntity<Map<String, Object>> healthCheck() {
+        Map<String, Object> health = new HashMap<>();
 
+        try {
+            // Test connectivité service agence
+            boolean agenceConnected = agenceServiceClient.testConnection();
 
+            health.put("status", "UP");
+            health.put("service", "BankCardService");
+            health.put("version", "1.0.0");
+            health.put("timestamp", LocalDateTime.now());
+            health.put("dependencies", Map.of(
+                    "agenceService", agenceConnected ? "UP" : "DOWN"));
+
+            if (!agenceConnected) {
+                health.put("status", "DEGRADED");
+                health.put("warnings", "Service agence inaccessible");
+            }
+
+        } catch (Exception e) {
+            log.error("❌ Erreur health check: {}", e.getMessage());
+            health.put("status", "DOWN");
+            health.put("error", e.getMessage());
+        }
+
+        return ResponseEntity.ok(health);
+    }
+
+    /**
+     * Test de connectivité avec tous les services externes
+     */
+    @GetMapping("/connectivity-test")
+    public ResponseEntity<Map<String, Object>> testConnectivity() {
+        log.info("🔧 Test de connectivité depuis service carte vers service agence");
+
+        Map<String, Object> result = new HashMap<>();
+
+        try {
+            // Test connectivité vers le service agence
+            boolean agenceHealthOk = agenceServiceClient.testConnection2();
+            boolean agenceTestOk = agenceServiceClient.testConnection2();
+
+            Map<String, Object> agenceDetails = new HashMap<>();
+            agenceDetails.put("healthEndpoint", agenceHealthOk ? "CONNECTED" : "DISCONNECTED");
+            agenceDetails.put("testEndpoint", agenceTestOk ? "CONNECTED" : "DISCONNECTED");
+            agenceDetails.put("targetUrl", "http://localhost:8095/api/money/card-recharge");
+            agenceDetails.put("targetPort", 8095);
+
+            result.put("timestamp", LocalDateTime.now());
+            result.put("sourceService", "CarteService");
+            result.put("sourcePort", 8096);
+            result.put("targetService", "moneyService");
+            result.put("services", Map.of("moneyservice", agenceDetails));
+
+            String overallStatus;
+            if (agenceHealthOk && agenceTestOk) {
+                overallStatus = "ALL_CONNECTED";
+            } else if (agenceHealthOk || agenceTestOk) {
+                overallStatus = "PARTIAL_CONNECTIVITY";
+            } else {
+                overallStatus = "NO_CONNECTIVITY";
+            }
+
+            result.put("overall", overallStatus);
+
+        } catch (Exception e) {
+            log.error("❌ Erreur test connectivité: {}", e.getMessage());
+            result.put("error", e.getMessage());
+            result.put("overall", "CONNECTION_ERROR");
+        }
+
+        return ResponseEntity.ok(result);
+    }
+
+    /**
+     * Informations sur les endpoints disponibles
+     */
+    @GetMapping("/endpoints")
+    public ResponseEntity<Map<String, Object>> getEndpoints() {
+        Map<String, Object> endpoints = new HashMap<>();
+
+        endpoints.put("service", "BankCardService");
+        endpoints.put("baseUrl", "/api/v1/cartes");
+        endpoints.put("endpoints", Map.of(
+                "POST /create", "Créer une nouvelle carte",
+                "GET /my-cards", "Lister mes cartes",
+                "GET /{id}", "Détails d'une carte",
+                "POST /transfer-to-card", "Transférer vers carte",
+                "POST /{id}/transfer-to-account", "Transférer depuis carte",
+                "PUT /{id}/block", "Bloquer une carte",
+                "PUT /{id}/unblock", "Débloquer une carte",
+                "GET /health", "Santé du service",
+                "GET /connectivity-test", "Test connectivité"));
+
+        return ResponseEntity.ok(endpoints);
+    }
     // ========================================
     // GESTION D'ERREURS
     // ========================================

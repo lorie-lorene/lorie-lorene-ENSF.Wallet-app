@@ -214,9 +214,9 @@ public class TransactionService {
             case "FAILED":
                 newStatus = "FAILED";
                 clientAction = "FAILED";
-                log.warn("❌ Retrait carte échoué - Transaction: {}, Raison: {}", 
+                log.warn("❌ Retrait carte échoué - Transaction: {}, Raison: {}",
                         transaction.getExternalId(), reason);
-                
+
                 // IMPORTANT: Notifier le service Carte pour remboursement
                 notifyCardServiceForWithdrawalRefund(transaction, reason);
                 break;
@@ -224,7 +224,7 @@ public class TransactionService {
                 newStatus = "FAILED";
                 clientAction = "UNKNOWN";
                 log.error("🔧 Statut retrait carte inconnu: {} - Transaction: {}", status, transaction.getExternalId());
-                
+
                 // Aussi déclencher un remboursement par sécurité
                 notifyCardServiceForWithdrawalRefund(transaction, "Statut inconnu: " + status);
         }
@@ -261,7 +261,7 @@ public class TransactionService {
             payload.setCancellationReason(transaction.getCancellationReason());
             payload.setTimestamp(LocalDateTime.now());
 
-            log.info("🔄 [WITHDRAWAL-CALLBACK] Notification service Carte - RequestId: {}, Status: {}", 
+            log.info("🔄 [WITHDRAWAL-CALLBACK] Notification service Carte - RequestId: {}, Status: {}",
                     payload.getRequestId(), payload.getStatus());
 
             cardServiceClient.sendWithdrawalCallback(transaction.getCallbackUrl(), payload);
@@ -294,7 +294,7 @@ public class TransactionService {
             refundPayload.setCancellationReason("Retrait échoué: " + reason);
             refundPayload.setTimestamp(LocalDateTime.now());
 
-            log.info("💰 [REFUND-CALLBACK] Demande remboursement carte - RequestId: {}", 
+            log.info("💰 [REFUND-CALLBACK] Demande remboursement carte - RequestId: {}",
                     refundPayload.getRequestId());
 
             cardServiceClient.sendWithdrawalRefundCallback(transaction.getCallbackUrl(), refundPayload);
@@ -307,7 +307,7 @@ public class TransactionService {
     /**
      * NOUVELLE MÉTHODE: Créer transaction retrait carte
      */
-    public Transaction createCardWithdrawal(String clientId, String idCarte, String phoneNumber, 
+    public Transaction createCardWithdrawal(String clientId, String idCarte, String phoneNumber,
             double amount, String provider) {
         Transaction transaction = new Transaction();
         transaction.setClientId(clientId);
