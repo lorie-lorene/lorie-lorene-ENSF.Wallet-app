@@ -4,6 +4,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.data.mongodb.repository.Query;
 import org.springframework.data.mongodb.repository.Update;
@@ -365,4 +367,154 @@ public interface UserRepository extends MongoRepository<Client, String> {
      */
     @Query("{'$or': [{'cni': ?0}, {'numero': ?1}], '_id': {$ne: ?2}}")
     List<Client> findPotentialDuplicates(String cni, String numero, String excludeClientId);
+
+    /**
+     * Search by email or name (case insensitive)
+     */
+    Page<Client> findByEmailContainingIgnoreCaseOrNomContainingIgnoreCase(
+            String email, String nom, Pageable pageable);
+    
+    /**
+     * Multi-field search
+     */
+    Page<Client> findByEmailContainingIgnoreCaseOrNomContainingIgnoreCaseOrPrenomContainingIgnoreCaseOrCniContainingOrNumeroContaining(
+            String email, String nom, String prenom, String cni, String numero, Pageable pageable);
+    
+    /**
+     * Search with status filter
+     */
+    Page<Client> findByStatusAndEmailContainingIgnoreCaseOrNomContainingIgnoreCase(
+            ClientStatus status, String email, String nom, Pageable pageable);
+    
+    /**
+     * Find by agency
+     */
+    Page<Client> findByIdAgence(String idAgence, Pageable pageable);
+    
+    /**
+     * Complex search with multiple filters
+     */
+    @Query("{ $and: [ " +
+           "{ 'status': ?0 }, " +
+           "{ 'idAgence': ?2 }, " +
+           "{ $or: [ " +
+           "{ 'email': { $regex: ?1, $options: 'i' } }, " +
+           "{ 'nom': { $regex: ?1, $options: 'i' } }, " +
+           "{ 'prenom': { $regex: ?1, $options: 'i' } } " +
+           "] } " +
+           "] }")
+    Page<Client> findByStatusAndSearchAndAgence(ClientStatus status, String search, String agence, Pageable pageable);
+
+    // =====================================
+    // DATE-BASED QUERIES FOR STATISTICS
+    // =====================================
+    
+    /**
+     * Count clients created after a specific date
+     */
+    long countByCreatedAtAfter(LocalDateTime date);
+    
+    /**
+     * Count clients created between two dates
+     */
+    long countByCreatedAtBetween(LocalDateTime startDate, LocalDateTime endDate);
+    
+    /**
+     * Find recent registrations
+     */
+    List<Client> findTop10ByCreatedAtAfterOrderByCreatedAtDesc(LocalDateTime date);
+    
+    /**
+     * Find clients created in the last N days
+     */
+    List<Client> findByCreatedAtAfter(LocalDateTime date);
+    
+    /**
+     * Find clients by creation date range with pagination
+     */
+    Page<Client> findByCreatedAtBetween(LocalDateTime startDate, LocalDateTime endDate, Pageable pageable);
+
+    // =====================================
+    // AGENCY-BASED STATISTICS
+    // =====================================
+    
+    /**
+     * Count clients by agency
+     */
+    long countByIdAgence(String idAgence);
+    
+    /**
+     * Find all clients by agency with status filter
+     */
+    Page<Client> findByIdAgenceAndStatus(String idAgence, ClientStatus status, Pageable pageable);
+    
+    /**
+     * Get agency distribution using aggregation
+     */
+    @Query(value = "{ 'idAgence': { $ne: null } }", 
+           fields = "{ 'idAgence': 1, '_id': 0 }")
+    List<Client> findAllAgencyIds();
+
+    // =====================================
+    // ADVANCED ANALYTICS QUERIES
+    // =====================================
+    
+    /**
+     * Count active clients (for dashboard statistics)
+     */
+    @Query(value = "{ 'status': 'ACTIVE' }", count = true)
+    long countActiveClients();
+    
+    /**
+     * Count pending approvals
+     */
+    @Query(value = "{ 'status': 'PENDING' }", count = true)
+    long countPendingApprovals();
+    
+    /**
+     * Find clients with recent activity
+     */
+    @Query("{ 'lastLoginAt': { $gte: ?0 } }")
+    List<Client> findClientsWithRecentActivity(LocalDateTime since);
+    
+    /**
+     * Find clients by registration date range and status
+     */
+    Page<Client> findByCreatedAtBetweenAndStatus(
+            LocalDateTime startDate, LocalDateTime endDate, ClientStatus status, Pageable pageable);
+    
+    /**
+     * Custom aggregation query for monthly registration trends
+     */
+    @Query(value = "{ 'createdAt': { $gte: ?0, $lte: ?1 } }")
+    List<Client> findRegistrationsByDateRange(LocalDateTime startDate, LocalDateTime endDate);
+
+    // =====================================
+    // SORTING AND ORDERING
+    // =====================================
+    
+    /**
+     * Find all clients ordered by creation date (newest first)
+     */
+    Page<Client> findAllByOrderByCreatedAtDesc(Pageable pageable);
+    
+    /**
+     * Find clients by status ordered by creation date
+     */
+    Page<Client> findByStatusOrderByCreatedAtDesc(ClientStatus status, Pageable pageable);
+    
+    /**
+     * Find clients by agency ordered by name
+     */
+    Page<Client> findByIdAgenceOrderByNomAscPrenomAsc(String idAgence, Pageable pageable);
+
+    /**
+     * Find clients by status with pagination
+     */
+    Page<Client> findByStatus(ClientStatus status, Pageable pageable);
+    
+    /**
+     * Find clients by multiple statuses
+     */
+    Page<Client> findByStatusIn(List<ClientStatus> statuses, Pageable pageable);
 }

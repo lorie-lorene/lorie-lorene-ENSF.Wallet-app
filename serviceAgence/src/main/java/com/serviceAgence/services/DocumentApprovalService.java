@@ -648,4 +648,166 @@ private void updateAgenceAccountStatistics(String idAgence) {
         
         return recommendation.toString();
     }
+
+    /**
+     * Bulk approve multiple documents
+     * 
+     * @param documentIds List of document IDs to approve
+     * @param comment Common comment for all approvals
+     * @param approvedBy User performing the approval
+     * @return BulkOperationResult with success/failure details
+     */
+    @Transactional
+    public BulkOperationResult bulkApproveDocuments(List<String> documentIds, 
+                                                String comment, 
+                                                String approvedBy) {
+        
+        log.info("✅ Starting bulk approval for {} documents by {}", documentIds.size(), approvedBy);
+        
+        List<String> successfulDocuments = new ArrayList<>();
+        List<BulkOperationResult.BulkOperationError> errors = new ArrayList<>();
+        
+        for (String documentId : documentIds) {
+            try {
+                // Create approval request for each document
+                DocumentApprovalRequest approvalRequest = new DocumentApprovalRequest();
+                approvalRequest.setNotes(comment != null ? comment : "Approbation en lot");
+                
+                // Use existing single approval method
+                DocumentApprovalResult result = approveDocument(documentId, approvalRequest, approvedBy);
+                
+                if (result != null && "APPROVED".equals(result.getStatus())) {
+                    successfulDocuments.add(documentId);
+                    log.debug("✅ Document {} approuvé avec succès", documentId);
+                } else {
+                    errors.add(new BulkOperationResult.BulkOperationError(
+                        documentId, 
+                        "Échec de l'approbation - statut: " + (result != null ? result.getStatus() : "null"),
+                        "APPROVAL_FAILED"
+                    ));
+                }
+                
+            } catch (AuthenticationException e) {
+                log.warn("❌ Document {} non trouvé ou non accessible", documentId);
+                errors.add(new BulkOperationResult.BulkOperationError(
+                    documentId, 
+                    "Document non trouvé ou non accessible",
+                    "DOCUMENT_NOT_FOUND"
+                ));
+                
+            } catch (Exception e) {
+                log.error("❌ Erreur lors de l'approbation du document {}: {}", documentId, e.getMessage());
+                errors.add(new BulkOperationResult.BulkOperationError(
+                    documentId, 
+                    "Erreur technique: " + e.getMessage(),
+                    "TECHNICAL_ERROR"
+                ));
+            }
+        }
+        
+        // Build result
+        BulkOperationResult result = BulkOperationResult.builder()
+                .totalDocuments(documentIds.size())
+                .successCount(successfulDocuments.size())
+                .failureCount(errors.size())
+                .successfulDocuments(successfulDocuments)
+                .errors(errors)
+                .operationType("APPROVE")
+                .performedBy(approvedBy)
+                .completedAt(LocalDateTime.now())
+                .build();
+        
+        log.info("✅ Bulk approval completed: {} succès, {} échecs sur {} documents", 
+                result.getSuccessCount(), result.getFailureCount(), result.getTotalDocuments());
+        
+        return result;
+    }
+
+    /**
+     * Bulk reject multiple documents
+     * 
+     * @param documentIds List of document IDs to reject
+     * @param reason Common reason for all rejections
+     * @param rejectedBy User performing the rejection
+     * @return BulkOperationResult with success/failure details
+     */
+    @Transactional
+    public BulkOperationResult bulkRejectDocuments(List<String> documentIds, 
+                                                String reason, 
+                                                String rejectedBy) {
+        
+        log.info("❌ Starting bulk rejection for {} documents by {} - Reason: {}", 
+                documentIds.size(), rejectedBy, reason);
+        
+        List<String> successfulDocuments = new ArrayList<>();
+        List<BulkOperationResult.BulkOperationError> errors = new ArrayList<>();
+        
+        for (String documentId : documentIds) {
+            try {
+                // Create rejection request for each document
+                DocumentRejectionRequest rejectionRequest = new DocumentRejectionRequest();
+                rejectionRequest.setReason(reason);
+                
+                // Use existing single rejection method
+                DocumentApprovalResult result = rejectDocument(documentId, rejectionRequest, rejectedBy);
+                
+                if (result != null && "REJECTED".equals(result.getStatus())) {
+                    successfulDocuments.add(documentId);
+                    log.debug("❌ Document {} rejeté avec succès", documentId);
+                } else {
+                    errors.add(new BulkOperationResult.BulkOperationError(
+                        documentId, 
+                        "Échec du rejet - statut: " + (result != null ? result.getStatus() : "null"),
+                        "REJECTION_FAILED"
+                    ));
+                }
+                
+            } catch (AuthenticationException e) {
+                log.warn("❌ Document {} non trouvé ou non accessible", documentId);
+                errors.add(new BulkOperationResult.BulkOperationError(
+                    documentId, 
+                    "Document non trouvé ou non accessible",
+                    "DOCUMENT_NOT_FOUND"
+                ));
+                
+            } catch (Exception e) {
+                log.error("❌ Erreur lors du rejet du document {}: {}", documentId, e.getMessage());
+                errors.add(new BulkOperationResult.BulkOperationError(
+                    documentId, 
+                    "Erreur technique: " + e.getMessage(),
+                    "TECHNICAL_ERROR"
+                ));
+            }
+        }
+        
+        // Build result
+        BulkOperationResult result = BulkOperationResult.builder()
+                .totalDocuments(documentIds.size())
+                .successCount(successfulDocuments.size())
+                .failureCount(errors.size())
+                .successfulDocuments(successfulDocuments)
+                .errors(errors)
+                .operationType("REJECT")
+                .performedBy(rejectedBy)
+                .completedAt(LocalDateTime.now())
+                .build();
+        
+        log.info("❌ Bulk rejection completed: {} succès, {} échecs sur {} documents", 
+                result.getSuccessCount(), result.getFailureCount(), result.getTotalDocuments());
+        
+        return result;
+    }
+
+    /**
+     * Helper method to validate bulk operation eligibility
+     * 
+     * @param documentIds List of document IDs to validate
+     * @return List of documents that can be processed
+     */
+    private List<String> validateBulkOperationEligibility(List<String> documentIds) {
+        return documentIds.stream()
+                .filter(id -> id != null && !id.trim().isEmpty())
+                .distinct() // Remove duplicates
+                .collect(Collectors.toList());
+    }
 }

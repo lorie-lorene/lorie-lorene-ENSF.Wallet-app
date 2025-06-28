@@ -295,6 +295,97 @@ public class DocumentApprovalController {
         }
     }
 
+    /**
+     * ✅ Bulk Approve Documents
+     */
+    @PostMapping("/bulk-approve")
+    @Operation(summary = "Approbation en lot de documents")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Documents approuvés en lot"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Données invalides"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Accès refusé")
+    })
+    public ResponseEntity<ApiResponse> bulkApproveDocuments(
+            @Valid @RequestBody BulkDocumentRequest bulkRequest,
+            Authentication authentication) {
+
+        try {
+            String approvedBy = authentication.getName();
+            log.info("✅ Approbation en lot: {} documents par {}", 
+                    bulkRequest.getDocumentIds().size(), approvedBy);
+
+            // Validate input
+            if (bulkRequest.getDocumentIds() == null || bulkRequest.getDocumentIds().isEmpty()) {
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("Liste de documents vide"));
+            }
+
+            // Process bulk approval
+            BulkOperationResult result = documentApprovalService
+                    .bulkApproveDocuments(bulkRequest.getDocumentIds(), 
+                                        bulkRequest.getComment(), 
+                                        approvedBy);
+
+            log.info("✅ Approbation en lot terminée: {} succès, {} échecs", 
+                    result.getSuccessCount(), result.getFailureCount());
+
+            return ResponseEntity.ok(ApiResponse.success(result));
+
+        } catch (Exception e) {
+            log.error("❌ Erreur approbation en lot: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Erreur lors de l'approbation en lot: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * ❌ Bulk Reject Documents
+     */
+    @PostMapping("/bulk-reject")
+    @Operation(summary = "Rejet en lot de documents")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Documents rejetés en lot"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Données invalides"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Accès refusé")
+    })
+    public ResponseEntity<ApiResponse> bulkRejectDocuments(
+            @Valid @RequestBody BulkDocumentRequest bulkRequest,
+            Authentication authentication) {
+
+        try {
+            String rejectedBy = authentication.getName();
+            log.info("❌ Rejet en lot: {} documents par {} - Raison: {}", 
+                    bulkRequest.getDocumentIds().size(), rejectedBy, bulkRequest.getReason());
+
+            // Validate input
+            if (bulkRequest.getDocumentIds() == null || bulkRequest.getDocumentIds().isEmpty()) {
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("Liste de documents vide"));
+            }
+
+            if (bulkRequest.getReason() == null || bulkRequest.getReason().trim().isEmpty()) {
+                return ResponseEntity.badRequest()
+                        .body(ApiResponse.error("Raison du rejet requise"));
+            }
+
+            // Process bulk rejection
+            BulkOperationResult result = documentApprovalService
+                    .bulkRejectDocuments(bulkRequest.getDocumentIds(), 
+                                    bulkRequest.getReason(), 
+                                    rejectedBy);
+
+            log.info("❌ Rejet en lot terminé: {} succès, {} échecs", 
+                    result.getSuccessCount(), result.getFailureCount());
+
+            return ResponseEntity.ok(ApiResponse.success(result));
+
+        } catch (Exception e) {
+            log.error("❌ Erreur rejet en lot: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("Erreur lors du rejet en lot: " + e.getMessage()));
+        }
+    }
+
     // /**
     //  * 🔍 Get Document Details for Review
     //  */
