@@ -21,7 +21,6 @@ import com.serviceAgence.model.Agence;
 import com.serviceAgence.model.CompteUser;
 import com.serviceAgence.model.DocumentKYC;
 import com.serviceAgence.repository.AgenceRepository;
-import com.serviceAgence.repository.CompteRepository;
 import com.serviceAgence.repository.DocumentKYCRepository;
 
 import lombok.extern.slf4j.Slf4j;
@@ -39,8 +38,7 @@ public class AgenceService {
 
     @Autowired
     private CompteService compteService;
-    @Autowired
-    private CompteRepository compteRepository;
+
     @Autowired
     private TransactionService transactionService;
 
@@ -218,11 +216,6 @@ public class AgenceService {
                         "Agence " + idAgence + " introuvable"));
     }
 
-    private CompteUser getAgenceOrThrow2(String idcompte) {
-        return compteRepository.findById(idcompte)
-                .orElseThrow(() -> new AgenceException("Compte_INTROUVABLE",
-                        "Agence " + idcompte + " introuvable"));
-    }
 
     /**
      * Validation des limites d'une agence
@@ -485,4 +478,60 @@ public class AgenceService {
             return null;
         }
     }
+
+    /**
+     * Met à jour les statistiques de création de comptes pour une agence
+     * Appelé automatiquement après création d'un compte suite à approbation KYC
+     */
+    public void updateAccountCreationStatistics(String idAgence) {
+        log.info("📊 Mise à jour statistiques création comptes - Agence: {}", idAgence);
+        
+        try {
+            // Récupérer l'agence
+            Agence agence = agenceRepository.findById(idAgence)
+                    .orElseThrow(() -> new AgenceException("AGENCE_INTROUVABLE", "Agence introuvable: " + idAgence));
+
+            // Incrémenter le compteur de comptes créés
+            agence.setTotalComptes(agence.getTotalComptes() + 1);
+            
+            // Mettre à jour la date de dernière activité
+            agence.setLastActivityAt(LocalDateTime.now());
+            
+            // // Calculer le taux de succès KYC (optionnel)
+            // updateKYCSuccessRate(agence);
+            
+            // Sauvegarder
+            agenceRepository.save(agence);
+            
+            log.info("✅ Statistiques agence mises à jour: {} - Total comptes: {}", 
+                    idAgence, agence.getTotalComptes());
+                    
+        } catch (Exception e) {
+            log.error("❌ Erreur mise à jour statistiques agence {}: {}", idAgence, e.getMessage(), e);
+            throw new AgenceException("STAT_UPDATE_ERROR", "Erreur mise à jour statistiques: " + e.getMessage());
+        }
+    }
+    // /**
+    //  * Met à jour le taux de succès KYC de l'agence
+    //  */
+    // private void updateKYCSuccessRate(Agence agence) {
+    //     try {
+    //         // Compter les documents approuvés vs total pour cette agence
+    //         long totalDocuments = documentRepository.countByIdAgence(agence.getIdAgence());
+    //         long approvedDocuments = documentRepository.countByStatusAndIdAgence(
+    //                 DocumentStatus.APPROVED, agence.getIdAgence());
+            
+    //         if (totalDocuments > 0) {
+    //             double successRate = (double) approvedDocuments / totalDocuments * 100;
+    //             agence.set(BigDecimal.valueOf(successRate));
+                
+    //             log.debug("📈 Taux succès KYC agence {}: {:.2f}%", 
+    //                     agence.getCodeAgence(), successRate);
+    //         }
+            
+    //     } catch (Exception e) {
+    //         log.warn("⚠️ Impossible de calculer le taux de succès KYC pour l'agence {}: {}", 
+    //                 agence.getCodeAgence(), e.getMessage());
+    //     }
+    // }
 }

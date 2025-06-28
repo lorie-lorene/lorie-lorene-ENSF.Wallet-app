@@ -7,6 +7,7 @@ import com.serviceAgence.services.DocumentApprovalService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -17,9 +18,9 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import com.serviceAgence.exception.AuthenticationException;
 
-import java.time.LocalDateTime;
-import java.util.List;
+import java.time.LocalDate;
 import java.util.Map;
 
 /**
@@ -46,7 +47,7 @@ public class DocumentApprovalController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Liste récupérée"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Accès refusé")
     })
-    public ResponseEntity<ApiResponse> getPendingDocuments(
+    public ResponseEntity<ApiResponse<Page<PendingDocumentDTO>>> getPendingDocuments(
             @PageableDefault(size = 20, sort = "submittedAt") Pageable pageable,
             @RequestParam(required = false) String agencyFilter,
             @RequestParam(required = false) String typeFilter) {
@@ -55,46 +56,12 @@ public class DocumentApprovalController {
             log.info("📋 Récupération documents en attente - page: {}, size: {}", 
                     pageable.getPageNumber(), pageable.getPageSize());
 
-            // For now, return mock data - implement real document service integration
-            List<Map<String, Object>> mockDocuments = List.of(
-                Map.of(
-                    "id", "DOC_001",
-                    "clientId", "CLIENT_123",
-                    "clientName", "Jean Dupont",
-                    "documentType", "CNI",
-                    "status", "PENDING",
-                    "submittedAt", LocalDateTime.now().minusDays(1),
-                    "agencyCode", "AGENCE001",
-                    "priority", "NORMAL",
-                    "fileUrl", "/documents/cni_123.pdf"
-                ),
-                Map.of(
-                    "id", "DOC_002", 
-                    "clientId", "CLIENT_456",
-                    "clientName", "Marie Martin",
-                    "documentType", "PASSPORT",
-                    "status", "PENDING",
-                    "submittedAt", LocalDateTime.now().minusDays(2),
-                    "agencyCode", "AGENCE002",
-                    "priority", "HIGH",
-                    "fileUrl", "/documents/passport_456.pdf"
-                )
-            );
+            // ✅ USE REAL SERVICE instead of mock data
+            Page<PendingDocumentDTO> pendingDocuments = documentApprovalService
+                    .getPendingDocuments(pageable, agencyFilter);
 
-            // Build paginated response
-            Map<String, Object> paginatedResponse = Map.of(
-                "content", mockDocuments,
-                "totalElements", 25L,
-                "totalPages", 2,
-                "size", pageable.getPageSize(),
-                "number", pageable.getPageNumber(),
-                "first", pageable.getPageNumber() == 0,
-                "last", pageable.getPageNumber() == 1,
-                "numberOfElements", mockDocuments.size()
-            );
-
-            log.info("✅ Documents en attente récupérés: {} documents", mockDocuments.size());
-            return ResponseEntity.ok(ApiResponse.success(paginatedResponse));
+            log.info("📋 {} documents en attente trouvés", pendingDocuments.getTotalElements());
+            return ResponseEntity.ok(ApiResponse.success(pendingDocuments));
 
         } catch (Exception e) {
             log.error("❌ Erreur récupération documents en attente: {}", e.getMessage(), e);
@@ -107,22 +74,25 @@ public class DocumentApprovalController {
      * Détails d'un document pour review avec images
      */
     @GetMapping("/{documentId}/review")
-    @Operation(summary = "Récupérer un document pour review")
-    @ApiResponses({
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Document récupéré pour review"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Document introuvable"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Document non disponible pour review")
-    })
-    public ResponseEntity<DocumentReviewDTO> getDocumentForReview(@PathVariable String documentId) {
-
+    @Operation(summary = "Récupérer un document pour review détaillée")
+    public ResponseEntity<ApiResponse> getDocumentForReview(@PathVariable String documentId) {
         try {
-            DocumentReviewDTO documentReview = documentApprovalService.getDocumentForReview(documentId);
+            log.info("👁️ Récupération document pour review: {}", documentId);
 
-            log.info("🔍 Document récupéré pour review: {}", documentId);
-            return ResponseEntity.ok(documentReview);
+            // ✅ USE REAL SERVICE instead of mock
+            DocumentReviewDTO documentReview = documentApprovalService
+                    .getDocumentForReview(documentId);
 
+            log.info("👁️ Document récupéré pour review: {} - Type: {}", 
+                    documentId, documentReview.getStatus());
+            
+            return ResponseEntity.ok(ApiResponse.success(documentReview));
+
+        } catch (AuthenticationException e) {
+            log.warn("❌ Document introuvable ou non accessible: {}", documentId);
+            return ResponseEntity.notFound().build();
         } catch (Exception e) {
-            log.error("❌ Erreur récupération document pour review {}: {}", documentId, e.getMessage());
+            log.error("❌ Erreur récupération document {}: {}", documentId, e.getMessage());
             return ResponseEntity.badRequest().build();
         }
     }
@@ -134,59 +104,31 @@ public class DocumentApprovalController {
     @Operation(summary = "Approuver un document")
     public ResponseEntity<ApiResponse> approveDocument(
             @PathVariable String documentId,
-            @RequestBody Map<String, Object> approvalData) {
+            @Valid @RequestBody DocumentApprovalRequest approvalRequest,
+            Authentication authentication) {
 
         try {
-            log.info("✅ Approbation document: {}", documentId);
+            // ✅ GET REAL ADMIN INFO from security context
+            String approvedBy = authentication.getName();
+            log.info("✅ Approbation document: {} par {}", documentId, approvedBy);
 
-            // Mock approval process
-            Map<String, Object> result = Map.of(
-                "documentId", documentId,
-                "status", "APPROVED",
-                "approvedBy", "current-admin", // Get from security context
-                "approvedAt", LocalDateTime.now(),
-                "comments", approvalData.getOrDefault("comments", "")
-            );
+            // ✅ USE REAL SERVICE METHOD with proper DTO
+            DocumentApprovalResult result = documentApprovalService
+                    .approveDocument(documentId, approvalRequest, approvedBy);
 
-            log.info("✅ Document approuvé: {}", documentId);
+            log.info("✅ Document approuvé avec succès: {} - Statut: {}", 
+                    documentId, result.getStatus());
+            
             return ResponseEntity.ok(ApiResponse.success(result));
 
+        } catch (AuthenticationException e) {
+            log.warn("❌ Erreur validation document {}: {}", documentId, e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error(e.getMessage()));
         } catch (Exception e) {
             log.error("❌ Erreur approbation document {}: {}", documentId, e.getMessage(), e);
             return ResponseEntity.internalServerError()
                     .body(ApiResponse.error("Erreur lors de l'approbation du document"));
-        }
-    }
-
-   /**
-     * ❌ Reject Document
-     */
-    @PostMapping("/{documentId}/reject")
-    @Operation(summary = "Rejeter un document")
-    public ResponseEntity<ApiResponse> rejectDocument(
-            @PathVariable String documentId,
-            @RequestBody Map<String, Object> rejectionData) {
-
-        try {
-            log.info("❌ Rejet document: {}", documentId);
-
-            // Mock rejection process
-            Map<String, Object> result = Map.of(
-                "documentId", documentId,
-                "status", "REJECTED",
-                "rejectedBy", "current-admin", // Get from security context
-                "rejectedAt", LocalDateTime.now(),
-                "reason", rejectionData.getOrDefault("reason", "Non spécifié"),
-                "comments", rejectionData.getOrDefault("comments", "")
-            );
-
-            log.info("❌ Document rejeté: {}", documentId);
-            return ResponseEntity.ok(ApiResponse.success(result));
-
-        } catch (Exception e) {
-            log.error("❌ Erreur rejet document {}: {}", documentId, e.getMessage(), e);
-            return ResponseEntity.internalServerError()
-                    .body(ApiResponse.error("Erreur lors du rejet du document"));
         }
     }
     /**
@@ -262,21 +204,30 @@ public class DocumentApprovalController {
      */
     @GetMapping("/statistics")
     @Operation(summary = "Statistiques des documents")
-    @ApiResponses({
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Statistiques récupérées"),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Accès refusé")
-    })
-    public ResponseEntity<DocumentStatisticsDTO> getDocumentStatistics() {
+    public ResponseEntity<ApiResponse> getDocumentStatistics(
+            @RequestParam(required = false) String agenceFilter,
+            @RequestParam(required = false) LocalDate dateStart,
+            @RequestParam(required = false) LocalDate dateEnd) {
 
         try {
-            DocumentStatisticsDTO statistics = documentApprovalService.getDocumentStatistics();
+            log.info("📊 Récupération statistiques documents");
 
-            log.info("📊 Statistiques documents générées");
-            return ResponseEntity.ok(statistics);
+            // ✅ USE REAL SERVICE instead of mock data
+            DocumentStatisticsDTO statistics = documentApprovalService
+                    .getDocumentStatistics();
+
+            log.info("📊 Statistiques calculées: total={}, pending={}, approved={}, rejected={}", 
+                    statistics.getTotalDocuments(), 
+                    statistics.getPendingDocuments(),
+                    statistics.getApprovedDocuments(), 
+                    statistics.getRejectedDocuments());
+            
+            return ResponseEntity.ok(ApiResponse.success(statistics));
 
         } catch (Exception e) {
-            log.error("❌ Erreur génération statistiques documents: {}", e.getMessage());
-            return ResponseEntity.badRequest().build();
+            log.error("❌ Erreur récupération statistiques: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError()
+                    .body(ApiResponse.error("Erreur lors de la récupération des statistiques"));
         }
     }
 
@@ -308,6 +259,39 @@ public class DocumentApprovalController {
         } catch (Exception e) {
             log.error("❌ Erreur recherche documents: {}", e.getMessage());
             return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @PostMapping("/{documentId}/reject")
+    @Operation(summary = "Rejeter un document")
+    public ResponseEntity<ApiResponse> rejectDocument(
+            @PathVariable String documentId,
+            @Valid @RequestBody DocumentRejectionRequest rejectionRequest,
+            Authentication authentication) {
+
+        try {
+            // ✅ GET REAL ADMIN INFO from security context
+            String rejectedBy = authentication.getName();
+            log.info("❌ Rejet document: {} par {} - Raison: {}", 
+                    documentId, rejectedBy, rejectionRequest.getReason());
+
+            // ✅ USE REAL SERVICE METHOD with proper DTO
+            DocumentApprovalResult result = documentApprovalService
+                    .rejectDocument(documentId, rejectionRequest, rejectedBy);
+
+            log.info("❌ Document rejeté avec succès: {} - Statut: {}", 
+                    documentId, result.getStatus());
+            
+            return ResponseEntity.ok(ApiResponse.success(result));
+
+        } catch (AuthenticationException e) {
+            log.warn("❌ Erreur validation document {}: {}", documentId, e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error(e.getMessage()));
+        } catch (Exception e) {
+            log.error("❌ Erreur rejet document {}: {}", documentId, e.getMessage(), e);
+            return ResponseEntity.internalServerError()
+                    .body(ApiResponse.error("Erreur lors du rejet du document"));
         }
     }
 

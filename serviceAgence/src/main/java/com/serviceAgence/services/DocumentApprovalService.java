@@ -1,8 +1,11 @@
 package com.serviceAgence.services;
 
+import com.serviceAgence.dto.AccountCreationRequest;
+import com.serviceAgence.dto.AccountCreationResult;
 import com.serviceAgence.dto.document.*;
 import com.serviceAgence.enums.DocumentStatus;
 import com.serviceAgence.exception.AuthenticationException;
+import com.serviceAgence.model.CompteUser;
 import com.serviceAgence.model.DocumentKYC;
 import com.serviceAgence.repository.DocumentKYCRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -11,10 +14,16 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.serviceAgence.event.WelcomeNotificationEvent;
+import com.serviceAgence.event.AccountActivatedEvent;
+import com.serviceAgence.event.DocumentRejectionEvent;
+import com.serviceAgence.exception.ServiceException;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -30,7 +39,16 @@ public class DocumentApprovalService {
     private DocumentKYCRepository documentRepository;
 
     @Autowired
+    private CompteService compteService;
+
+    @Autowired  
     private AgenceService agenceService;
+
+    @Autowired
+    private NotificationService notificationService;
+
+    @Autowired
+    private RabbitTemplate rabbitTemplate;
 
     /**
      * Récupération des documents en attente d'approbation
@@ -126,6 +144,192 @@ public class DocumentApprovalService {
         }
     }
 
+    /**
+     * Déclenche la création automatique du compte après approbation du document
+     * Gère également les notifications et événements associés
+     */
+    private void triggerAccountCreation(DocumentKYC document) {
+        log.info("🏦 Déclenchement création compte pour client: {} - Document: {}", 
+                document.getIdClient(), document.getId());
+
+        try {
+            // 1. Préparer la demande de création de compte
+            AccountCreationRequest accountRequest = new AccountCreationRequest();
+            accountRequest.setIdClient(document.getIdClient());
+            accountRequest.setIdAgence(document.getIdAgence());
+
+            // 2. Créer le compte via CompteService
+            AccountCreationResult accountResult = compteService.createAccount(accountRequest);
+
+            if (!accountResult.isSuccess()) {
+                log.error("❌ Échec création compte: {} - {}", 
+                        accountResult.getErrorCode(), accountResult.getMessage());
+                throw new ServiceException("Erreur création compte: " + accountResult.getMessage());
+            }
+
+            log.info("✅ Compte créé avec succès: numéro={}, client={}", 
+                    accountResult.getNumeroCompte(), document.getIdClient());
+
+            // 3. Récupérer les détails du compte créé
+            CompteUser nouveauCompte = compteService.getAccountDetails(
+                    accountResult.getNumeroCompte().toString());
+
+            // // 4. Activer automatiquement le compte (post-KYC approval)
+            // compteService.activateAccount(
+            //         nouveauCompte.getNumeroCompte(), 
+            //         "SYSTEM_AUTO_ACTIVATION");
+
+            // 5. Déclencher les notifications d'activation
+            triggerAccountActivationEvents(nouveauCompte, document);
+
+            // 6. Mettre à jour les statistiques de l'agence
+            updateAgenceAccountStatistics(document.getIdAgence());
+
+            log.info("🎉 Processus complet terminé - Compte: {} activé pour client: {}", 
+                    nouveauCompte.getNumeroCompte(), document.getIdClient());
+
+        } catch (Exception e) {
+            log.error("❌ Erreur critique lors de la création du compte: {}", e.getMessage(), e);
+            throw new ServiceException("Erreur lors de la création du compte: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Déclenche tous les événements liés à l'activation du compte
+     */
+    private void triggerAccountActivationEvents(CompteUser compte, DocumentKYC document) {
+        try {
+            log.info("📢 Déclenchement événements activation compte: {}", compte.getNumeroCompte());
+
+            // 1. Notification création de compte
+            notificationService.sendAccountCreationNotification(compte);
+
+            // 2. Notification activation automatique
+            notificationService.sendAccountActivationNotification(compte);
+
+            // 3. Envoyer notification de bienvenue au UserService
+            sendWelcomeNotificationToUserService(compte, document);
+
+            // 4. Déclencher événement interne d'activation
+            publishAccountActivationInternalEvent(compte, document);
+
+            log.info("✅ Tous les événements d'activation envoyés pour: {}", compte.getNumeroCompte());
+
+        } catch (Exception e) {
+            log.error("❌ Erreur envoi événements activation: {}", e.getMessage(), e);
+            // Ne pas faire échouer le processus principal pour des erreurs de notification
+        }
+    }
+
+    /**
+ * Envoie notification de bienvenue au UserService
+ */
+private void sendWelcomeNotificationToUserService(CompteUser compte, DocumentKYC document) {
+    try {
+        WelcomeNotificationEvent welcomeEvent = new WelcomeNotificationEvent();
+        welcomeEvent.setEventId(UUID.randomUUID().toString());
+        welcomeEvent.setClientId(compte.getIdClient());
+        welcomeEvent.setNumeroCompte(Long.valueOf(compte.getNumeroCompte()));
+        welcomeEvent.setAgenceCode(compte.getIdAgence());
+        welcomeEvent.setDocumentValidatedAt(document.getValidatedAt());
+        welcomeEvent.setTimestamp(LocalDateTime.now());
+
+        rabbitTemplate.convertAndSend("Notification-exchange", "welcome.send", welcomeEvent);
+        log.info("📧 Notification bienvenue envoyée au UserService pour: {}", compte.getIdClient());
+
+    } catch (Exception e) {
+        log.error("❌ Erreur envoi notification bienvenue: {}", e.getMessage(), e);
+    }
+}
+
+/**
+ * Publie événement interne d'activation de compte
+ */
+private void publishAccountActivationInternalEvent(CompteUser compte, DocumentKYC document) {
+    try {
+        AccountActivatedEvent activationEvent = new AccountActivatedEvent();
+        activationEvent.setEventId(UUID.randomUUID().toString());
+        activationEvent.setIdClient(compte.getIdClient());
+        activationEvent.setNumeroCompte(String.valueOf(compte.getNumeroCompte()));
+        activationEvent.setIdAgence(compte.getIdAgence());
+        activationEvent.setActivatedAt(compte.getActivatedAt());
+        activationEvent.setActivationTrigger("KYC_DOCUMENT_APPROVAL");
+        activationEvent.setDocumentId(document.getId());
+        activationEvent.setTimestamp(LocalDateTime.now());
+
+        rabbitTemplate.convertAndSend("Account-Events-Exchange", "account.activated", activationEvent);
+        log.info("🔔 Événement activation publié pour compte: {}", compte.getNumeroCompte());
+
+    } catch (Exception e) {
+        log.error("❌ Erreur publication événement activation: {}", e.getMessage(), e);
+    }
+}
+
+/**
+ * Amélioration des notifications de rejet
+ */
+private void notifyUserServiceOfRejection(DocumentKYC document, String reason) {
+    try {
+        log.info("📤 Notification rejet au UserService - Client: {}, Raison: {}", 
+                document.getIdClient(), reason);
+
+        // 1. Créer événement de rejet détaillé
+        DocumentRejectionEvent rejectionEvent = new DocumentRejectionEvent();
+        rejectionEvent.setEventId(UUID.randomUUID().toString());
+        rejectionEvent.setClientId(document.getIdClient());
+        rejectionEvent.setDocumentId(document.getId());
+        rejectionEvent.setDocumentType(document.getType());
+        rejectionEvent.setRejectionReason(reason);
+        rejectionEvent.setRejectedAt(document.getValidatedAt());
+        rejectionEvent.setRejectedBy(document.getValidatedBy());
+        rejectionEvent.setAgenceCode(document.getIdAgence());
+        rejectionEvent.setCanResubmit(determineResubmissionEligibility(reason));
+        rejectionEvent.setTimestamp(LocalDateTime.now());
+
+        // 2. Envoyer au UserService
+        rabbitTemplate.convertAndSend("Notification-exchange", "document.rejection", rejectionEvent);
+
+        // 3. Envoyer notification par email/SMS
+        rabbitTemplate.convertAndSend("Notification-exchange", "rejection.send", rejectionEvent);
+
+        log.info("✅ Notifications rejet envoyées pour document: {}", document.getId());
+
+    } catch (Exception e) {
+        log.error("❌ Erreur envoi notifications rejet: {}", e.getMessage(), e);
+    }
+}
+
+/**
+ * Détermine si le client peut resoumettre un document
+ */
+private boolean determineResubmissionEligibility(String rejectionReason) {
+    // Raisons permettant une nouvelle soumission
+    List<String> resubmittableReasons = List.of(
+            "DOCUMENT_FLOU", "DOCUMENT_INCOMPLET", "MAUVAISE_QUALITE",
+            "INFORMATIONS_ILLISIBLES", "FORMAT_INCORRECT"
+    );
+    
+    return resubmittableReasons.stream()
+            .anyMatch(reason -> rejectionReason.toUpperCase().contains(reason));
+}
+
+/**
+ * Met à jour les statistiques de l'agence après création de compte
+ */
+private void updateAgenceAccountStatistics(String idAgence) {
+    try {
+        log.info("📊 Mise à jour statistiques agence: {}", idAgence);
+        
+        // Utiliser AgenceService pour mettre à jour les statistiques
+        agenceService.updateAccountCreationStatistics(idAgence);
+        
+        log.info("✅ Statistiques agence mises à jour: {}", idAgence);
+        
+    } catch (Exception e) {
+        log.error("❌ Erreur mise à jour statistiques agence {}: {}", idAgence, e.getMessage());
+        // Ne pas faire échouer le processus principal
+    }
+}
     /**
      * Rejet d'un document par l'admin
      */
@@ -268,43 +472,6 @@ public class DocumentApprovalService {
     // MÉTHODES PRIVÉES
     // ==========================================
 
-    /**
-     * Déclencher la création de compte après approbation
-     */
-    private void triggerAccountCreation(DocumentKYC document) {
-        // Récupérer les informations de la demande originale depuis le document
-        // et déclencher la création du compte via AgenceService
-        
-        try {
-            // Cette méthode sera appelée pour créer le compte bancaire
-            // après que les documents ont été manuellement approuvés
-            agenceService.createAccountAfterDocumentApproval(
-                document.getIdClient(),
-                document.getIdAgence()
-            );
-        } catch (Exception e) {
-            log.error("Erreur création compte pour client {}: {}", document.getIdClient(), e.getMessage());
-            throw e;
-        }
-    }
-
-    /**
-     * Notifier UserService du rejet
-     */
-    private void notifyUserServiceOfRejection(DocumentKYC document, String reason) {
-        // Envoyer notification de rejet via RabbitMQ
-        try {
-            // Cette méthode sera implémentée pour notifier le UserService
-            agenceService.notifyUserServiceOfRejection(
-                document.getIdClient(),
-                document.getIdAgence(),
-                reason
-            );
-        } catch (Exception e) {
-            log.error("Erreur notification rejet pour client {}: {}", document.getIdClient(), e.getMessage());
-            // Ne pas faire échouer le rejet si la notification échoue
-        }
-    }
 
     /**
      * Conversion vers DTO de document en attente

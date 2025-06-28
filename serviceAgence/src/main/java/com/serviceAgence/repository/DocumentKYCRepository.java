@@ -7,6 +7,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.data.mongodb.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
@@ -159,4 +160,9 @@ public interface DocumentKYCRepository extends MongoRepository<DocumentKYC, Stri
      */
     @Query("{'validatedAt': {$gte: ?0, $lt: ?1}, 'cheminSelfie': {$ne: null}}")
     List<DocumentKYC> findDocumentsWithSelfieInPeriod(LocalDateTime start, LocalDateTime end);
+
+    @Query("SELECT COUNT(d) FROM DocumentKYC d WHERE d.idAgence = :idAgence")
+    long countByIdAgence(@Param("idAgence") String idAgence);
+
+    
 }
