@@ -9,6 +9,8 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
+
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -23,7 +25,7 @@ import java.util.function.Function;
 public class JwtService {
 
     // JWT Configuration
-    @Value("${app.jwt.secret:mySecretKey123456789012345678901234567890}")
+    @Value("${app.jwt.secret}")
     private String jwtSecret;
     
     @Value("${app.jwt.expiration:86400000}") // 24 hours default
@@ -33,9 +35,15 @@ public class JwtService {
     private int refreshExpirationMs;
 
     private SecretKey getSigningKey() {
-        return Keys.hmacShaKeyFor(jwtSecret.getBytes());
+        // Ensure minimum 64 bytes for HS512
+        byte[] keyBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
+        if (keyBytes.length < 64) {
+            byte[] paddedKey = new byte[64];
+            System.arraycopy(keyBytes, 0, paddedKey, 0, Math.min(keyBytes.length, 64));
+            keyBytes = paddedKey;
+        }
+        return Keys.hmacShaKeyFor(keyBytes);
     }
-
     /**
      * Generate JWT token for authenticated user
      */
