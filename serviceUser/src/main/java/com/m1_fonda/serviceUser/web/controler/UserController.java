@@ -184,7 +184,6 @@ public class UserController {
                 .status(status)
                 .isKycVerified(ClientStatus.ACTIVE.toString().equals(status))
                 .tokenExpired(false)
-                .tokenValidityRemaining(jwtService.getRemainingTokenTime(token))
                 .lastLogin(clientOpt.map(Client::getLastLogin).orElse(null))
                 .build();
 

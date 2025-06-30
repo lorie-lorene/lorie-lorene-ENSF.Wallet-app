@@ -215,6 +215,8 @@ public class DocumentApprovalController {
             // ✅ USE REAL SERVICE instead of mock data
             DocumentStatisticsDTO statistics = documentApprovalService
                     .getDocumentStatistics();
+            log.info("statistics: {}", statistics);
+            log.info("📊 Statistiques récupérées pour l'agence: {}", agenceFilter);
 
             log.info("📊 Statistiques calculées: total={}, pending={}, approved={}, rejected={}", 
                     statistics.getTotalDocuments(), 
