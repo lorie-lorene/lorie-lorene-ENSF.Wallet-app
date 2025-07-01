@@ -17,7 +17,8 @@ public interface CompteRepository extends MongoRepository<CompteUser, String> {
 
     Optional<CompteUser> findByNumeroCompte(Long numeroCompte);
 
-    List<CompteUser> findByIdClient(String idClient);
+   // List<CompteUser> findByIdClient(String idClient);
+    CompteUser findByIdClient(String idClient);
 
     List<CompteUser> findByIdClientOrderByCreatedAtDesc(String idClient);
 

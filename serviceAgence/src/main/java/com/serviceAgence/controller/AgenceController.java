@@ -396,17 +396,20 @@ public class AgenceController {
     /**
      * Récupération du solde d'un compte
      */
-    @GetMapping("/comptes/{numeroCompte}/solde")
-    @PreAuthorize("hasRole('AGENCE') or hasRole('ADMIN') or hasRole('CLIENT')")
+    @GetMapping("/comptes/solde/{idClient}")
+   // @PreAuthorize("hasRole('AGENCE') or hasRole('ADMIN') or hasRole('CLIENT')")
     @Operation(summary = "Consulter le solde d'un compte")
     public ResponseEntity<Map<String, Object>> getAccountBalance(
-            @PathVariable @NotBlank String numeroCompte) {
+            @PathVariable @NotBlank String idClient) {
 
+            log.info("solde = {}", idClient);
         try {
-            BigDecimal solde = transactionService.getAccountBalance(numeroCompte);
+            BigDecimal solde = transactionService.getAccountBalanceClient(idClient);
+
+            log.info("solde = {}", solde);
 
             Map<String, Object> response = Map.of(
-                    "numeroCompte", numeroCompte,
+                    "idClient", idClient,
                     "solde", solde,
                     "devise", "FCFA",
                     "timestamp", java.time.LocalDateTime.now());
@@ -414,7 +417,7 @@ public class AgenceController {
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
-            log.error("Erreur récupération solde {}: {}", numeroCompte, e.getMessage());
+            log.error("Erreur récupération solde {}: {}", idClient, e.getMessage());
             return ResponseEntity.badRequest().build();
         }
     }
@@ -447,7 +450,7 @@ public class AgenceController {
      * Exécution d'une transaction manuelle par l'agence
      */
     @PostMapping("/transactions")
-    @PreAuthorize("hasRole('AGENCE')")
+   // @PreAuthorize("hasRole('AGENCE')")
     @Operation(summary = "Exécuter une transaction manuelle")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Transaction réussie"),

@@ -61,13 +61,28 @@ public class TransactionService {
      * Récupération du solde d'un compte
      */
     public BigDecimal getAccountBalance(String numeroCompte) {
+        
+            log.info("test = {}", numeroCompte);
         CompteUser compte = getCompteOrThrow(numeroCompte);
+        return compte.getSolde();
+
+        
+    }
+     public BigDecimal getAccountBalanceClient(String idClient) {
+        
+            log.info("test = {}", idClient);
+        CompteUser compte = compteRepository.findByIdClient(idClient);
+        
+            log.info("test = {}", compte);
+            
+            log.info("test = {}", compte.getSolde());
         return compte.getSolde();
 
     }
 
     /**
      * Traitement d'une transaction (compte-à-compte OU compte-vers-carte)
+     * 
      */
     public TransactionResult processTransaction(TransactionRequest request) {
         log.info("Début traitement transaction: type={}, montant={}, compte={}, destination={}",

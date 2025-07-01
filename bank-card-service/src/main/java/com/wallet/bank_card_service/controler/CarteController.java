@@ -73,7 +73,7 @@ public class CarteController {
 //Authentication authentication
         try {
            //String clientId = extractClientId(authentication);
-            String clientId= "685d32b096bf1126178aa9bb";
+            String clientId= "6863b4dcfbf87f0724d64bc7";
 
             request.setIdClient(clientId);
 
@@ -107,7 +107,7 @@ public class CarteController {
 
         try {
             //String clientId = extractClientId(authentication);
-            String clientId= "    685d32b096bf1126178aa9bb";
+            String clientId= "6863b4dcfbf87f0724d64bc7";
             List<Carte> cartes = carteService.getClientCards(clientId);
 
             log.info("📋 Récupération de {} cartes pour client: {}", cartes.size(), clientId);

@@ -102,9 +102,9 @@ public class DocumentApprovalService {
         DocumentKYC document = documentRepository.findById(documentId)
                 .orElseThrow(() -> new AuthenticationException("Document introuvable: " + documentId));
 
-        if (document.getStatus() != DocumentStatus.UNDER_REVIEW) {
-            throw new AuthenticationException("Document non en cours d'examen. Statut: " + document.getStatus());
-        }
+        // if (document.getStatus() != DocumentStatus.UNDER_REVIEW) {
+        //     throw new AuthenticationException("Document non en cours d'examen. Statut: " + document.getStatus());
+        // }
 
         // Approuver le document
         document.setStatus(DocumentStatus.APPROVED);

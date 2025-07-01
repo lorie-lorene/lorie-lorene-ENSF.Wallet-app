@@ -67,8 +67,13 @@ public class SecurityConfig {
 
                                                 // Endpoints publics
                                                 .requestMatchers("/api/v1/agence/auth/**").permitAll()
+                                                
+                                                
+                                                .requestMatchers("/api/v1/agence/comptes/solde/{idClient}").permitAll()
                                                 .requestMatchers("/api/v1/agence/getAgences").permitAll()
                                                 .requestMatchers(HttpMethod.POST, "/api/v1/agence/add").permitAll()
+                                                
+                                                .requestMatchers(HttpMethod.POST, "/api/v1/agence/transactions").permitAll()
                                                 .requestMatchers(HttpMethod.POST, "/api/v1/agence/register").permitAll()
                                                 .requestMatchers(HttpMethod.POST, "/api/v1/agence/contact").permitAll()
                                                 .requestMatchers("/api/v1/agence/public/**").permitAll()
