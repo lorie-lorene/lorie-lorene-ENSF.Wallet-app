@@ -402,11 +402,10 @@ public class AgenceController {
     public ResponseEntity<Map<String, Object>> getAccountBalance(
             @PathVariable @NotBlank String idClient) {
 
-            log.info("solde = {}", idClient);
         try {
             BigDecimal solde = transactionService.getAccountBalanceClient(idClient);
 
-            log.info("solde = {}", solde);
+            log.info("solde2 = {}", solde);
 
             Map<String, Object> response = Map.of(
                     "idClient", idClient,

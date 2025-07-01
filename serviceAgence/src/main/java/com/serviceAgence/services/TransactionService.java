@@ -62,20 +62,18 @@ public class TransactionService {
      */
     public BigDecimal getAccountBalance(String numeroCompte) {
         
-            log.info("test = {}", numeroCompte);
         CompteUser compte = getCompteOrThrow(numeroCompte);
         return compte.getSolde();
 
-        
+
     }
      public BigDecimal getAccountBalanceClient(String idClient) {
         
-            log.info("test = {}", idClient);
+            log.info("test entrant = {}", idClient);
         CompteUser compte = compteRepository.findByIdClient(idClient);
         
-            log.info("test = {}", compte);
             
-            log.info("test = {}", compte.getSolde());
+            log.info("test2 = {}", compte.getSolde());
         return compte.getSolde();
 
     }
