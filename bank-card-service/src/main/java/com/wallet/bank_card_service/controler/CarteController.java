@@ -536,7 +536,7 @@ public class CarteController {
     /*
      * recharge d'une carte de credit par l'api money service
      */
-    @PostMapping("/{idCarte}/recharge-orange-money")
+    @PostMapping("/recharge-orange-money/{idCarte}")
     @PreAuthorize("hasRole('CLIENT')")
     public ResponseEntity<RechargeResult> rechargeFromOrangeMoney(
             @PathVariable String idCarte,

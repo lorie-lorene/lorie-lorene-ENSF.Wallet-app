@@ -39,7 +39,7 @@ public class SecurityConfig {
                                                 .permitAll()
                                                 .requestMatchers(
                                                                 new org.springframework.security.web.util.matcher.AntPathRequestMatcher(
-                                                                                "/api/v1/cartes/{idCarte}/recharge-orange-money",
+                                                                                "/api/v1/cartes/recharge-orange-money/{idCarte}",
                                                                                 "POST"))
                                                 .permitAll()
                                                 .requestMatchers(

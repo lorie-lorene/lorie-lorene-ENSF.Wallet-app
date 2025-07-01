@@ -1,5 +1,12 @@
 {
     "configurations": [
+        
+        {
+            "type": "java",
+            "name": "MoneyServiceApplication",
+            "request": "launch",
+            "mainClass": "com.wallet.money.MoneyServiceApplication"
+        },
         {
             "type": "java",
             "name": "Spring Boot-ServiceRegisterApplication<serviceRegister>",
@@ -11,6 +18,17 @@
             "envFile": "${workspaceFolder}/.env",
             "vmArgs": " -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=53116 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Dspring.jmx.enabled=true -Djava.rmi.server.hostname=localhost -Dspring.application.admin.enabled=true -Dspring.boot.project.name=serviceRegister"
         },
+                {
+            "type": "java",
+            "name": "MoneyServiceApplication",
+            "request": "launch",
+            "mainClass": "com.wallet.money.MoneyServiceApplication",
+            "projectName": "money-service",
+            "cwd": "${workspaceFolder}/money-service",
+            "env": {},
+            "vmArgs": "-XX:+ShowCodeDetailsInExceptionMessages"
+        },
+
         {
             "type": "java",
             "name": "Spring Boot-ServiceProxyApplication<serviceProxy>",
@@ -40,7 +58,7 @@
             "projectName": "serviceAgence",
             "args": "",
             "envFile": "${workspaceFolder}/.env",
-            "vmArgs": " -Dcom.sun.management.jmxremote=false -Dspring.jmx.enabled=false -Xms512m -Xmx2g -Dserver.port=8092 -Dspring.profiles.active=dev -Djava.net.preferIPv4Stack=true"
+            "vmArgs": " -Dcom.sun.management.jmxremote=false -Dspring.jmx.enabled=false -Xms512m -Xmx2g -Dserver.port=8092 -Dspring.profiles.active=dev -Djava.net.preferIPv4Stack=true -Dcom.sun.management.jmxremote.port=64453 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Djava.rmi.server.hostname=localhost -Dspring.application.admin.enabled=true -Dspring.boot.project.name=serviceAgence"
         },
         {
             "type": "java",

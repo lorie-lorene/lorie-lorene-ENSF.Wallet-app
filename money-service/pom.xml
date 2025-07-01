@@ -91,5 +91,5 @@
 		</plugins>
 	</build>
 
-		<finalName>money-servicer </finalName>
+		<finalName>money-service</finalName>
 </project>
