@@ -28,11 +28,18 @@ import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.nio.file.StandardCopyOption;
+import java.nio.file.Paths;
+import java.nio.file.Path;
+import java.nio.file.Files;
+import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -205,14 +212,18 @@ public class UserController {
     /**
      * Register new user
      */
-    @PostMapping("/register")
-    @Operation(summary = "Register new user", description = "Register a new user account")
+    @PostMapping(value = "/register", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Register new user", description = "Register a new user account with image uploads")
     @ApiResponses(value = {
         @ApiResponse(responseCode = "202", description = "Registration submitted successfully"),
         @ApiResponse(responseCode = "400", description = "Invalid registration data"),
         @ApiResponse(responseCode = "409", description = "User already exists")
     })
-    public ResponseEntity<?> register(@Valid @RequestBody ClientRegistrationDTO registration, BindingResult result) {
+    public ResponseEntity<?> register(
+            @Valid @ModelAttribute ClientRegistrationDTO registration,
+            @RequestParam("images") MultipartFile[] images,
+            BindingResult result) {
+        
         try {
             // Validate request
             if (result.hasErrors()) {
@@ -220,7 +231,35 @@ public class UserController {
                     .body(createValidationErrorResponse(result));
             }
 
-            log.info("Registration attempt for email: {}", registration.getEmail());
+            // Validate images
+            if (images == null || images.length != 3) {
+                return ResponseEntity.badRequest()
+                    .body(ErrorResponse.builder()
+                        .error("INVALID_IMAGES")
+                        .message("Exactly 3 images required: recto, verso, selfie")
+                        .timestamp(LocalDateTime.now())
+                        .path("/api/v1/users/register")
+                        .build());
+            }
+
+            // Validate image types
+            for (MultipartFile image : images) {
+                if (!isValidImageType(image)) {
+                    return ResponseEntity.badRequest()
+                        .body(ErrorResponse.builder()
+                            .error("INVALID_IMAGE_TYPE")
+                            .message("Only PNG, JPG, JPEG images are allowed")
+                            .timestamp(LocalDateTime.now())
+                            .path("/api/v1/users/register")
+                            .build());
+                }
+            }
+
+            log.info("Registration attempt for email: {} with CNI: {}", 
+                    registration.getEmail(), registration.getCni());
+
+            // Save images and set paths in DTO
+            saveImagesAndSetPaths(registration, images);
 
             // Process registration
             RegisterResponse response = userService.registerClient(registration);
@@ -236,6 +275,15 @@ public class UserController {
                     .timestamp(LocalDateTime.now())
                     .path("/api/v1/users/register")
                     .build());
+        } catch (IOException e) {
+            log.error("File upload error: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ErrorResponse.builder()
+                    .error("FILE_UPLOAD_ERROR")
+                    .message("Failed to save uploaded images")
+                    .timestamp(LocalDateTime.now())
+                    .path("/api/v1/users/register")
+                    .build());
         } catch (Exception e) {
             log.error("Registration error: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -246,6 +294,72 @@ public class UserController {
                     .path("/api/v1/users/register")
                     .build());
         }
+    }
+
+    private boolean isValidImageType(MultipartFile file) {
+        if (file.isEmpty()) {
+            return false;
+        }
+
+        log.info("file", file);
+        
+        // String contentType = file.getContentType();
+        // log.info("contentType:", contentType);
+        // return contentType != null && (
+        //     contentType.equals("image/png") ||
+        //     contentType.equals("image/jpeg") ||
+        //     contentType.equals("image/jpg")
+        // );
+
+        return true;
+    }
+
+    private void saveImagesAndSetPaths(ClientRegistrationDTO registration, MultipartFile[] images) throws IOException {
+        String cni = registration.getCni();
+        String baseUploadPath = "uploads/cni"; // Configure this path in application.properties
+        
+        // Create CNI directory
+        Path cniDir = Paths.get(baseUploadPath, cni);
+        Files.createDirectories(cniDir);
+        
+        // Save images in order: recto, verso, selfie
+        String[] imageTypes = {"recto", "verso", "selfie"};
+        
+        for (int i = 0; i < images.length && i < imageTypes.length; i++) {
+            MultipartFile image = images[i];
+            String extension = getFileExtension(image.getOriginalFilename());
+            log.info("extension", extension);
+            String filename = cni + "_" + imageTypes[i] + extension;
+            
+            Path filePath = cniDir.resolve(filename);
+            Files.copy(image.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
+            
+            // Set the relative path in DTO
+            String relativePath = cni + "/" + filename;
+            
+            switch (i) {
+                case 0:
+                    registration.setRectoCni(relativePath);
+                    break;
+                case 1:
+                    registration.setVersoCni(relativePath);
+                    break;
+                case 2:
+                    registration.setSelfieImage(relativePath);
+                    break;
+            }
+        }
+        
+        log.info("Images saved successfully for CNI: {}", cni);
+    }
+
+    private String getFileExtension(String filename) {
+        if (filename == null || filename.isEmpty()) {
+            return ".png"; // default extension
+        }
+        
+        int lastDotIndex = filename.lastIndexOf('.');
+        return lastDotIndex > 0 ? filename.substring(lastDotIndex) : ".png";
     }
 
     /**
@@ -288,9 +402,12 @@ public class UserController {
     @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<?> getProfile(Authentication authentication) {
         try {
-            String clientId = extractClientId(authentication);
+            String clientEmail = extractClientId(authentication);
 
-            Optional<Client> client = userService.findById(clientId);
+            Optional<Client> client = userService.findByEmail(clientEmail);
+
+            log.info("Retrieving profile for client ID: {}", clientEmail);
+            log.info("CLient : {}", client);
 
             if (client.isPresent()) {
                 ClientProfileResponse profile = mapToProfileResponse(client.get());

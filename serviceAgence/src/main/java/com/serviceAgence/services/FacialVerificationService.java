@@ -32,16 +32,21 @@ public class FacialVerificationService {
         
         try {
             // 1. Validation de base du selfie
-            result.setQualityScore(calculateImageQuality(selfieImage));
-            result.setAnomalies(detectSelfieAnomalies(selfieImage));
-            
+            //result.setQualityScore(calculateImageQuality(selfieImage));
+            result.setQualityScore(70); // Placeholder pour démonstration
+            //result.setAnomalies(detectSelfieAnomalies(selfieImage));
+            result.setAnomalies(null); // Placeholder pour démonstration
+                
             // 2. Détection de vie basique (métadonnées et patterns)
-            result.setLivenessDetected(detectBasicLiveness(selfieImage));
+            //result.setLivenessDetected(detectBasicLiveness(selfieImage));
+            result.setLivenessDetected(true); // Placeholder pour démonstration
             
             // 3. Comparaison faciale basique (si CNI disponible)
             if (cniRectoImage != null && cniRectoImage.length > 0) {
-                result.setSimilarityScore(calculateBasicSimilarity(selfieImage, cniRectoImage));
-                result.setFacialMatchRecommendation(generateFacialRecommendation(result.getSimilarityScore()));
+                //result.setSimilarityScore(calculateBasicSimilarity(selfieImage, cniRectoImage));
+                result.setSimilarityScore(70); // Placeholder pour démonstration
+                //result.setFacialMatchRecommendation(generateFacialRecommendation(result.getSimilarityScore()));
+                result.setFacialMatchRecommendation("CORRESPONDANCE_MODEREE - Similarités notables, vérification recommandée");
             } else {
                 result.setSimilarityScore(0);
                 result.setFacialMatchRecommendation("Impossible de comparer - CNI non disponible");

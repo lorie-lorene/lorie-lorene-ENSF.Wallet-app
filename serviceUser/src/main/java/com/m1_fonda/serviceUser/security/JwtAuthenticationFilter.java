@@ -54,69 +54,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         "/actuator/health"
     );
 
-//     @Override
-//     protected void doFilterInternal(
-//         HttpServletRequest request,
-//         HttpServletResponse response,
-//         FilterChain filterChain) throws ServletException, IOException {
-
-//     try {
-//         String requestPath = request.getRequestURI();
-        
-//         // Skip JWT validation for public endpoints
-//         if (isPublicEndpoint(requestPath)) {
-//             filterChain.doFilter(request, response);
-//             return;
-//         }
-
-//         // Extract token from Authorization header
-//         String authHeader = request.getHeader("Authorization");
-//         String token = jwtService.extractTokenFromHeader(authHeader);
-
-//         if (token == null) {
-//             handleMissingToken(response);
-//             return;
-//         }
-
-//         // Validate and process token
-//         if (jwtService.isTokenValid(token) && SecurityContextHolder.getContext().getAuthentication() == null) {
-            
-//             // Determine token type and set authentication accordingly
-//             if (jwtService.isAgenceServiceToken(token)) {
-//                 // Handle AgenceService admin token
-//                 handleAgenceServiceToken(token, request);
-                
-//             } else if (jwtService.isUserServiceToken(token)) {
-//                 // Handle UserService client token
-//                 handleUserServiceToken(token, request);
-                
-//             } else {
-//                 log.warn("Unknown token type for path: {}", requestPath);
-//                 handleInvalidToken(response, "Unknown token type");
-//                 return;
-//             }
-//         } else if (token != null) {
-//             // Token exists but is invalid
-//             handleInvalidToken(response, "Invalid or expired token");
-//             return;
-//         }
-
-//         filterChain.doFilter(request, response);
-
-//     } catch (ExpiredJwtException e) {
-//         log.warn("JWT token expired: {}", e.getMessage());
-//         handleExpiredToken(response);
-//     } catch (JwtException e) {
-//         log.error("JWT error: {}", e.getMessage());
-//         handleInvalidToken(response, "JWT processing error");
-//     } catch (Exception e) {
-//         log.error("Authentication filter error: {}", e.getMessage(), e);
-//         handleAuthenticationError(response);
-//     }
-// }
-
-@Override
-protected void doFilterInternal(
+    @Override
+    protected void doFilterInternal(
         HttpServletRequest request,
         HttpServletResponse response,
         FilterChain filterChain) throws ServletException, IOException {
@@ -132,30 +71,91 @@ protected void doFilterInternal(
 
         // Extract token from Authorization header
         String authHeader = request.getHeader("Authorization");
+        String token = jwtService.extractTokenFromHeader(authHeader);
 
-        // **TEST BYPASS**: Accept any Bearer token
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            List<SimpleGrantedAuthority> authorities = Collections.singletonList(
-                new SimpleGrantedAuthority("ROLE_CLIENT")
-            );
+        if (token == null) {
+            handleMissingToken(response);
+            return;
+        }
 
-            UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
-                "test-client-id", null, authorities
-            );
+        // Validate and process token
+        if (jwtService.isTokenValid(token) && SecurityContextHolder.getContext().getAuthentication() == null) {
             
-            authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-            SecurityContextHolder.getContext().setAuthentication(authToken);
-            
-            log.debug("🔓 TEST MODE: Bypassing JWT validation");
+            // Determine token type and set authentication accordingly
+            if (jwtService.isAgenceServiceToken(token)) {
+                // Handle AgenceService admin token
+                handleAgenceServiceToken(token, request);
+                
+            } else if (jwtService.isUserServiceToken(token)) {
+                // Handle UserService client token
+                handleUserServiceToken(token, request);
+                
+            } else {
+                log.warn("Unknown token type for path: {}", requestPath);
+                handleInvalidToken(response, "Unknown token type");
+                return;
+            }
+        } else if (token != null) {
+            // Token exists but is invalid
+            handleInvalidToken(response, "Invalid or expired token");
+            return;
         }
 
         filterChain.doFilter(request, response);
 
+    } catch (ExpiredJwtException e) {
+        log.warn("JWT token expired: {}", e.getMessage());
+        handleExpiredToken(response);
+    } catch (JwtException e) {
+        log.error("JWT error: {}", e.getMessage());
+        handleInvalidToken(response, "JWT processing error");
     } catch (Exception e) {
-        log.error("JWT filter error: {}", e.getMessage(), e);
-        filterChain.doFilter(request, response);
+        log.error("Authentication filter error: {}", e.getMessage(), e);
+        handleAuthenticationError(response);
     }
 }
+
+// @Override
+// protected void doFilterInternal(
+//         HttpServletRequest request,
+//         HttpServletResponse response,
+//         FilterChain filterChain) throws ServletException, IOException {
+
+//     try {
+//         String requestPath = request.getRequestURI();
+        
+//         // Skip JWT validation for public endpoints
+//         if (isPublicEndpoint(requestPath)) {
+//             filterChain.doFilter(request, response);
+//             return;
+//         }
+
+//         // Extract token from Authorization header
+//         String authHeader = request.getHeader("Authorization");
+
+//         // **TEST BYPASS**: Accept any Bearer token
+//         if (authHeader != null && authHeader.startsWith("Bearer ")) {
+//             List<SimpleGrantedAuthority> authorities = Collections.singletonList(
+//                 new SimpleGrantedAuthority("ROLE_CLIENT")
+//             );
+
+//             UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+//                 "test-client-id", null, authorities
+//             );
+            
+//             authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+//             SecurityContextHolder.getContext().setAuthentication(authToken);
+            
+//             log.debug("🔓 TEST MODE: Bypassing JWT validation");
+//         }
+
+//         filterChain.doFilter(request, response);
+
+//     } catch (Exception e) {
+//         log.error("JWT filter error: {}", e.getMessage(), e);
+//         filterChain.doFilter(request, response);
+//     }
+// }
 
 /**
  * Handle AgenceService admin tokens

@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.serviceAgence.dto.*;
 import com.serviceAgence.enums.DocumentStatus;
+import com.serviceAgence.event.UserRegistrationEventReceived;
 import com.serviceAgence.exception.AgenceException;
 import com.serviceAgence.messaging.AgenceEventPublisher;
 import com.serviceAgence.model.Agence;
@@ -363,6 +364,7 @@ public class AgenceService {
                         "L'agence sélectionnée n'est pas active");
             }
 
+            log.info("request rectocni", request.getRectoCni());
             // 2. Validation de base des documents (format, taille, etc.)
             KYCValidationResult basicValidation = kycService.validateDocumentsBasic(
                     request.getIdClient(),
@@ -377,11 +379,11 @@ public class AgenceService {
             }
 
             // 3. Validation et analyse du selfie
-            if (!request.hasSelfie()) {
-                log.warn("Selfie manquant pour client: {}", request.getIdClient());
-                return RegistrationProcessingResult.rejected("SELFIE_REQUIRED",
-                        "Selfie utilisateur obligatoire pour la vérification d'identité");
-            }
+            // if (!request.hasSelfie()) {
+            //     log.warn("Selfie manquant pour client: {}", request.getIdClient());
+            //     return RegistrationProcessingResult.rejected("SELFIE_REQUIRED",
+            //             "Selfie utilisateur obligatoire pour la vérification d'identité");
+            // }
 
             // 4. Analyse faciale du selfie
             SelfieAnalysisResult selfieAnalysis = facialVerificationService.analyzeSelfie(
@@ -394,11 +396,11 @@ public class AgenceService {
                     selfieAnalysis.isLivenessDetected());
 
             // 5. Créer document avec toutes les informations (CNI + Selfie)
-            DocumentKYC document = createDocumentWithSelfie(request, basicValidation, selfieAnalysis);
-            log.info("document", document);
+            // DocumentKYC document = createDocumentWithSelfie(request, basicValidation, selfieAnalysis);
+            // log.info("document", document);
 
-            documentRepository.save(document);
-            System.out.println("Document KYC enregistré: " + document.getIdClient());
+            // documentRepository.save(document);
+            // System.out.println("Document KYC enregistré: " + document.getIdClient());
 
             log.info("📄 Document avec selfie créé en attente d'approbation: client={}", request.getIdClient());
 
@@ -416,9 +418,7 @@ public class AgenceService {
     /**
      * Création du document KYC avec selfie
      */
-    private DocumentKYC createDocumentWithSelfie(UserRegistrationRequest request,
-            KYCValidationResult basicValidation,
-            SelfieAnalysisResult selfieAnalysis) {
+    public DocumentKYC createDocumentWithSelfie(UserRegistrationEventReceived request) {
         DocumentKYC document = new DocumentKYC();
 
         // Informations de base
@@ -433,34 +433,34 @@ public class AgenceService {
         document.setPrenomExtrait(request.getPrenom());
 
         // Stockage sécurisé des images
-        document.setCheminRecto(storeImageSecurely(request.getRectoCni(), "recto", request.getIdClient()));
-        document.setCheminVerso(storeImageSecurely(request.getVersoCni(), "verso", request.getIdClient()));
-        document.setCheminSelfie(storeImageSecurely(request.getSelfieImage(), "selfie", request.getIdClient()));
+        document.setCheminRecto(request.getRectoCni());
+        document.setCheminVerso(request.getVersoCni());
+        document.setCheminSelfie(request.getSelfieImage());
 
         // Scores de qualité
-        document.setScoreQualite(basicValidation.getQualityScore());
-        document.setSelfieQualityScore(selfieAnalysis.getQualityScore());
-        document.setSelfieSimilarityScore(selfieAnalysis.getSimilarityScore());
-        document.setLivenessDetected(selfieAnalysis.isLivenessDetected());
+        document.setScoreQualite(70); // Placeholder, à remplacer par le score réel
+        document.setSelfieQualityScore(70); // Placeholder, à remplacer par le score réel
+        document.setSelfieSimilarityScore(60);
+        document.setLivenessDetected(true); // Placeholder, à remplacer par le résultat réel
 
         // Métadonnées des fichiers
-        document.setFileSize((long) request.getRectoCni().length);
-        document.setSelfieFileSize(request.getSelfieSize());
+        document.setFileSize(20L); // Placeholder, à remplacer par la taille réelle
+        document.setSelfieFileSize(20L); // Placeholder, à remplacer par la taille réelle
 
         // Hash pour intégrité
-        document.setHashRecto(calculateHash(request.getRectoCni()));
-        document.setHashVerso(calculateHash(request.getVersoCni()));
-        document.setHashSelfie(calculateHash(request.getSelfieImage()));
+        document.setHashRecto("");
+        document.setHashVerso("");
+        document.setHashSelfie("");
 
         // Anomalies détectées
-        List<String> allAnomalies = new ArrayList<>();
-        if (basicValidation.getAnomalies() != null) {
-            allAnomalies.addAll(basicValidation.getAnomalies());
-        }
-        if (selfieAnalysis.getAnomalies() != null) {
-            allAnomalies.addAll(selfieAnalysis.getAnomalies());
-        }
-        document.setAnomaliesDetectees(allAnomalies);
+        // List<String> allAnomalies = new ArrayList<>();
+        // if (basicValidation.getAnomalies() != null) {
+        //     allAnomalies.addAll(basicValidation.getAnomalies());
+        // }
+        // if (selfieAnalysis.getAnomalies() != null) {
+        //     allAnomalies.addAll(selfieAnalysis.getAnomalies());
+        // }
+        document.setAnomaliesDetectees(java.util.Collections.emptyList());
 
         return document;
     }

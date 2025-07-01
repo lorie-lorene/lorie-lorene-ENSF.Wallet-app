@@ -33,7 +33,8 @@ public class SecurityConfig {
                                                 .requestMatchers("/api/v*/admin/**").permitAll() // Allow admin
                                                 // endpoints
                                                 // temporarily
-                                                .requestMatchers("/api/v1/cartes/admin/all").permitAll() // Public
+                                                .requestMatchers("/api/v1/cartes/admin/all").permitAll() // Public,
+                                                .requestMatchers("/api/v1/cartes/my-cards").permitAll()
                                                 .requestMatchers("/api/v1/cartes//admin/{idCarte}/admin-block")
                                                 .permitAll()
                                                 .requestMatchers(
@@ -44,6 +45,11 @@ public class SecurityConfig {
                                                 .requestMatchers(
                                                                 new org.springframework.security.web.util.matcher.AntPathRequestMatcher(
                                                                                 "/api/v1/cartes/webhooks/money-callback",
+                                                                                "POST"))
+                                                .permitAll()
+                                                .requestMatchers(
+                                                                new org.springframework.security.web.util.matcher.AntPathRequestMatcher(
+                                                                                "/api/v1/cartes/create",
                                                                                 "POST"))
                                                 .permitAll()
                                                 .requestMatchers(

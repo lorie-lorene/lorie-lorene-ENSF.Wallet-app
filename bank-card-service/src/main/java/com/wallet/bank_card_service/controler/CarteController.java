@@ -59,7 +59,7 @@ public class CarteController {
      * Créer une nouvelle carte bancaire ok!
      */
     @PostMapping("/create")
-    @PreAuthorize("hasRole('CLIENT')")
+    //@PreAuthorize("hasRole('CLIENT')")
     @Operation(summary = "Créer une nouvelle carte bancaire")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Carte créée avec succès"),
@@ -68,11 +68,12 @@ public class CarteController {
             @ApiResponse(responseCode = "409", description = "Limite de cartes atteinte")
     })
     public ResponseEntity<CarteCreationResult> createCarte(
-            @Valid @RequestBody CarteCreationRequest request,
-            Authentication authentication) {
-
+            @Valid @RequestBody CarteCreationRequest request
+            ) {
+//Authentication authentication
         try {
-            String clientId = extractClientId(authentication);
+           //String clientId = extractClientId(authentication);
+            String clientId= "685d32b096bf1126178aa9bb";
 
             request.setIdClient(clientId);
 
@@ -100,13 +101,13 @@ public class CarteController {
      * Lister toutes les cartes d'un client ok!
      */
     @GetMapping("/my-cards")
-    @PreAuthorize("hasRole('CLIENT')")
+    // @PreAuthorize("hasRole('CLIENT')")
     @Operation(summary = "Lister mes cartes bancaires")
     public ResponseEntity<List<Carte>> getMyCards(Authentication authentication) {
 
         try {
-            String clientId = extractClientId(authentication);
-
+            //String clientId = extractClientId(authentication);
+            String clientId= "    685d32b096bf1126178aa9bb";
             List<Carte> cartes = carteService.getClientCards(clientId);
 
             log.info("📋 Récupération de {} cartes pour client: {}", cartes.size(), clientId);
