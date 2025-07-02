@@ -210,6 +210,13 @@ public class CompteService {
     }
 
     /**
+     * Récupération des comptes d'une agence
+     */
+    public List<CompteUser> getAllComptes(){
+        return compteRepository.findAll();
+    }
+
+    /**
      * Statistiques des comptes
      */
     public Map<String, Object> getAccountStatistics(String idAgence) {

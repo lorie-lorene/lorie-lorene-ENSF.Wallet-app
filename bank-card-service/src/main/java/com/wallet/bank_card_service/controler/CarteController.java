@@ -58,6 +58,7 @@ public class CarteController {
     /**
      * Créer une nouvelle carte bancaire ok!
      */
+    @CrossOrigin(origins = "http://localhost:4000")
     @PostMapping("/create")
     //@PreAuthorize("hasRole('CLIENT')")
     @Operation(summary = "Créer une nouvelle carte bancaire")
@@ -70,12 +71,10 @@ public class CarteController {
     public ResponseEntity<CarteCreationResult> createCarte(
             @Valid @RequestBody CarteCreationRequest request
             ) {
-//Authentication authentication
+            //Authentication authentication
         try {
            //String clientId = extractClientId(authentication);
-            String clientId= "6863b4dcfbf87f0724d64bc7";
-
-            request.setIdClient(clientId);
+            String clientId= request.getIdClient();
 
             log.info("🆕 Demande création carte: client={},agence={} type={}", clientId, request.getIdAgence(),
                     request.getType());
@@ -537,25 +536,24 @@ public class CarteController {
      * recharge d'une carte de credit par l'api money service
      */
     @PostMapping("/recharge-orange-money/{idCarte}")
-    @PreAuthorize("hasRole('CLIENT')")
+    // @PreAuthorize("hasRole('CLIENT')")
     public ResponseEntity<RechargeResult> rechargeFromOrangeMoney(
             @PathVariable String idCarte,
-            @RequestBody @Valid OrangeMoneyRechargeRequest request,
-            Authentication authentication) {
+            @RequestBody @Valid OrangeMoneyRechargeRequest request) {
 
         try {
             log.info("💳 [RECHARGE] Demande recharge Orange Money - Carte: {}, Montant: {}",
                     idCarte, request.getMontant());
 
-            String clientId = authentication.getName();
+            // String clientId = authentication.getName();
             // String clientId = "1";
             // Vérifier que la carte appartient au client
             Carte carte = carteService.findById(idCarte);
-            if (carte == null || !carte.getIdClient().equals(clientId)) {
-                return ResponseEntity.badRequest().body(
-                        RechargeResult.failed("Carte non trouvée ou non autorisée"));
-            }
-
+            // if (carte == null || !carte.getIdClient().equals(clientId)) {
+            //     return ResponseEntity.badRequest().body(
+            //             RechargeResult.failed("Carte non trouvée ou non autorisée"));
+            // }
+            String clientId = carte.getIdClient();
             // Vérifier que la carte est active
             if (!carte.isActive()) {
                 return ResponseEntity.badRequest().body(

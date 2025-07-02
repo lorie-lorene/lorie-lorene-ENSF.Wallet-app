@@ -196,4 +196,31 @@ public class CompteController {
             return ResponseEntity.notFound().build();
         }
     }
+
+    @GetMapping("/getAllComptes")
+    @Operation(summary = "Récupérer tous les comptes", 
+               description = "Retourne la liste de tous les comptes")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Comptes récupérés avec succès"),
+        @ApiResponse(responseCode = "404", description = "Aucun compte trouvé"),
+        @ApiResponse(responseCode = "500", description = "Erreur interne du serveur")
+    })
+    public ResponseEntity<List<CompteUser>> getAllComptes() {
+        try {
+            log.info("🔍 Récupération de tous les comptes");
+            List<CompteUser> comptes = compteService.getAllComptes();
+            
+            if (comptes.isEmpty()) {
+                log.warn("⚠️ Aucun compte trouvé");
+                return ResponseEntity.notFound().build();
+            }
+            
+            log.info("✅ {} compte(s) trouvé(s)", comptes.size());
+            return ResponseEntity.ok(comptes);
+            
+        } catch (Exception e) {
+            log.error("❌ Erreur lors de la récupération des comptes: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
 }
