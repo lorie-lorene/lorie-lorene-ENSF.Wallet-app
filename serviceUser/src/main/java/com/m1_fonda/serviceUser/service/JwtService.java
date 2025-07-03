@@ -3,27 +3,33 @@ package com.m1_fonda.serviceUser.service;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.concurrent.TimeUnit;
 
-/**
- * 🔐 Enhanced JWT Service
- * Handles JWT token generation, validation, and extraction for user authentication
- * Now supports both UserService client tokens and AgenceService admin tokens
- */
 @Service
 @Slf4j
 public class JwtService {
+
+    // Injection des dépendances RabbitMQ pour la démonstration
+    @Autowired
+    private RabbitTemplate rabbitTemplate;
+    
+    @Autowired
+    private ObjectMapper objectMapper;
 
     // JWT Configuration
     @Value("${app.jwt.secret}")
@@ -35,6 +41,188 @@ public class JwtService {
     @Value("${app.jwt.refresh-expiration:604800000}") // 7 days default
     private int refreshExpirationMs;
 
+    // Configuration RabbitMQ pour la validation des tokens (démonstration)
+    @Value("${rabbitmq.exchange.auth:auth-exchange}")
+    private String authExchange;
+    
+    @Value("${rabbitmq.routing.key.token.validation:token.validation.request}")
+    private String tokenValidationRoutingKey;
+
+    
+    public boolean validateTokenViaRabbitMQ(String token, String requestedPath, String userId) {
+        try {
+            log.info("=== DÉMONSTRATION RABBITMQ TOKEN VALIDATION ===");
+            log.info("Validation du token pour l'utilisateur {} tentant d'accéder à {}", userId, requestedPath);
+            
+            if (!isTokenValid(token)) {
+                log.warn("Token invalide localement - Accès refusé immédiatement");
+                return false;
+            }
+            
+            Map<String, Object> validationRequest = createTokenValidationPayload(token, requestedPath, userId);
+            
+            boolean rabbitMQValidationResult = sendTokenValidationRequest(validationRequest);
+            
+            boolean agenceAuthorizationResult = simulateAgenceAuthorizationResponse(token, requestedPath);
+            
+            boolean finalDecision = rabbitMQValidationResult && agenceAuthorizationResult;
+            
+            log.info("=== RÉSULTAT DE LA VALIDATION RABBITMQ ===");
+            log.info("Validation locale: OK");
+            log.info("Validation RabbitMQ: {}", rabbitMQValidationResult ? "SUCCESS" : "FAILED");
+            log.info("Autorisation Agence: {}", agenceAuthorizationResult ? "GRANTED" : "DENIED");
+            log.info("Décision finale: {}", finalDecision ? "ACCÈS AUTORISÉ" : "ACCÈS REFUSÉ");
+            
+            return finalDecision;
+            
+        } catch (Exception e) {
+            log.error("Erreur lors de la validation RabbitMQ du token: {}", e.getMessage(), e);
+            return false;
+        }
+    }
+   
+    private Map<String, Object> createTokenValidationPayload(String token, String requestedPath, String userId) {
+        Map<String, Object> payload = new HashMap<>();
+        
+        try {
+            // Informations de base
+            payload.put("userId", userId);
+            payload.put("token", token);
+            payload.put("requestedPath", requestedPath);
+            payload.put("timestamp", new Date().toString());
+            payload.put("requestId", UUID.randomUUID().toString());
+            
+            // Extraction des claims du token pour validation
+            String clientId = extractClientId(token);
+            String role = extractRole(token);
+            String service = extractService(token);
+            
+            payload.put("clientId", clientId);
+            payload.put("role", role);
+            payload.put("service", service != null ? service : "UserService");
+            
+            // Informations de sécurité
+            payload.put("action", "PATH_ACCESS_VALIDATION");
+            payload.put("source", "UserService");
+            payload.put("validationType", "RBAC_CHECK"); // Role-Based Access Control
+            
+            log.debug("Payload de validation créé pour l'utilisateur {} - Chemin: {}", userId, requestedPath);
+            
+        } catch (Exception e) {
+            log.error("Erreur lors de la création du payload de validation: {}", e.getMessage());
+            payload.put("error", "PAYLOAD_CREATION_FAILED");
+        }
+        
+        return payload;
+    }
+    
+   
+    private boolean sendTokenValidationRequest(Map<String, Object> validationRequest) {
+        try {
+            log.info("Envoi de la requête de validation vers le service Agence via RabbitMQ...");
+            
+            // Conversion en JSON pour l'envoi
+            String jsonPayload = objectMapper.writeValueAsString(validationRequest);
+            
+            // Envoi via RabbitMQ (démonstration)
+            rabbitTemplate.convertAndSend(
+                authExchange,
+                tokenValidationRoutingKey,
+                jsonPayload
+            );
+            
+            log.info("Requête de validation envoyée avec succès via RabbitMQ");
+            log.debug("Exchange: {} | Routing Key: {}", authExchange, tokenValidationRoutingKey);
+            
+            // Simulation d'un délai de traitement
+            simulateProcessingDelay();
+            
+            return true;
+            
+        } catch (Exception e) {
+            log.error("Erreur lors de l'envoi de la requête RabbitMQ: {}", e.getMessage());
+            return false;
+        }
+    }
+    
+   
+    private boolean simulateAgenceAuthorizationResponse(String token, String requestedPath) {
+        try {
+            log.info("Simulation de la réponse du service Agence...");
+            
+            // Simulation de règles d'autorisation basées sur le rôle
+            String role = extractRole(token);
+            String service = extractService(token);
+            
+            // Règles de démonstration
+            if ("ADMIN".equals(role) || "SUPERVISOR".equals(role)) {
+                log.info("Utilisateur avec rôle administrateur - Accès autorisé à tous les chemins");
+                return true;
+            }
+            
+            if ("CLIENT".equals(role)) {
+                // Les clients ne peuvent accéder qu'à certains chemins
+                if (requestedPath.startsWith("/client/") || 
+                    requestedPath.startsWith("/public/") ||
+                    requestedPath.equals("/dashboard")) {
+                    log.info("Client autorisé à accéder au chemin: {}", requestedPath);
+                    return true;
+                } else {
+                    log.warn("Client non autorisé à accéder au chemin: {}", requestedPath);
+                    return false;
+                }
+            }
+            
+            if ("AgenceService".equals(service)) {
+                log.info("Token du service Agence - Accès privilégié autorisé");
+                return true;
+            }
+            
+            log.warn("Aucune règle d'autorisation trouvée pour le rôle: {} sur le chemin: {}", role, requestedPath);
+            return false;
+            
+        } catch (Exception e) {
+            log.error("Erreur lors de la simulation de l'autorisation Agence: {}", e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Simule un délai de traitement pour rendre la démonstration plus réaliste
+     */
+    private void simulateProcessingDelay() {
+        try {
+            // Simulation d'un délai de 100ms pour le traitement RabbitMQ
+            TimeUnit.MILLISECONDS.sleep(100);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("Délai de simulation interrompu");
+        }
+    }
+    
+    /**
+     * Méthode utilitaire pour logger les détails du token (démonstration)
+     * 
+     * @param token Token à analyser
+     */
+    public void logTokenDetails(String token) {
+        try {
+            log.info("=== DÉTAILS DU TOKEN (DÉMONSTRATION) ===");
+            log.info("Client ID: {}", extractClientId(token));
+            log.info("Role: {}", extractRole(token));
+            log.info("Service: {}", extractService(token));
+            log.info("Subject: {}", extractSubject(token));
+            log.info("Expiration: {}", extractExpiration(token));
+            log.info("Token valide: {}", isTokenValid(token));
+            log.info("Type de service: {}", isAgenceServiceToken(token) ? "AgenceService" : "UserService");
+            log.info("Privilèges admin: {}", hasAdminRole(token));
+            log.info("=====================================");
+        } catch (Exception e) {
+            log.error("Erreur lors de l'affichage des détails du token: {}", e.getMessage());
+        }
+    }
+
+   
     /**
      * Enhanced signing key generation to ensure HS512 compatibility
      */
